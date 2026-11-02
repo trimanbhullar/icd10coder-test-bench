@@ -1,0 +1,1109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>ICD-10 Coder Test Bench</title>
+<meta name="description" content="Test the ICD-10 coder by hand: paste a note, check the codes, record corrections, export a report.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+  /* Orion design language v2 (D:\Projects\Orion Design\ORION-DESIGN.md) */
+  @font-face { font-family: "Inter"; font-weight: 400; font-display: swap; src: url(fonts/inter-400.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; font-display: swap; src: url(fonts/inter-600.woff2) format("woff2"); }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: swap; src: url(fonts/jetbrains-mono-400.woff2) format("woff2"); }
+  @font-face { font-family: "JetBrains Mono"; font-weight: 600; font-display: swap; src: url(fonts/jetbrains-mono-600.woff2) format("woff2"); }
+  @font-face { font-family: "Space Grotesk"; font-weight: 700; font-display: swap; src: url(fonts/space-grotesk-700.woff2) format("woff2"); }
+  :root {
+    color-scheme: light;
+    --body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --brand: "Space Grotesk", "Inter", system-ui, sans-serif;
+    --rigel: #2f5bd3; --betelgeuse: #f0743e;
+    --page: #f5f6f9; --page-glow: rgba(47, 91, 211, .07);
+    --surface: #ffffff; --surface-2: #f2f4f8; --surface-3: #e3e7ef;
+    --text: #141a26; --text-2: #4d5668; --muted: #687083;
+    --border: rgba(20, 30, 55, .10); --border-strong: rgba(20, 30, 55, .20); --highlight: transparent;
+    --accent: #2f5bd3; --accent-hover: #2650c0; --on-accent: #ffffff; --accent-wash: rgba(47, 91, 211, .08);
+    --good: #1d8a57; --good-wash: rgba(29, 138, 87, .10);
+    --warning: #b4740f; --warn-wash: #fdf6e7; --warn-line: #f0d39a;
+    --critical: #c8433e; --crit-wash: #fdf0ef;
+    --shadow: 0 1px 2px rgba(20, 30, 55, .05), 0 4px 16px rgba(20, 30, 55, .05);
+    --shadow-pop: 0 12px 40px rgba(20, 30, 55, .16);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --rigel: #7aa2ff; --betelgeuse: #ff8a5c;
+      --page: #0a0a0b; --page-glow: rgba(255, 255, 255, .025);
+      --surface: #131314; --surface-2: #19191b; --surface-3: #252528;
+      --text: #ececee; --text-2: #a8a8af; --muted: #84848b;
+      --border: rgba(255, 255, 255, .08); --border-strong: rgba(255, 255, 255, .15); --highlight: rgba(255, 255, 255, .035);
+      --accent: #7aa2ff; --accent-hover: #94b4ff; --on-accent: #08112b; --accent-wash: rgba(122, 162, 255, .12);
+      --good: #4cc38a; --good-wash: rgba(76, 195, 138, .12);
+      --warning: #e8b04a; --warn-wash: rgba(232, 176, 74, .09); --warn-line: rgba(232, 176, 74, .35);
+      --critical: #f07a74; --crit-wash: rgba(240, 122, 116, .10);
+      --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 8px 24px rgba(0, 0, 0, .22);
+      --shadow-pop: 0 16px 48px rgba(0, 0, 0, .55);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--text); font: 14.5px/1.55 var(--body); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01";
+    background: radial-gradient(1100px 420px at 50% -160px, var(--page-glow), transparent 70%) no-repeat, var(--page); }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+  input, select, textarea, button { font-family: inherit; }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
+
+  /* header + tabs */
+  .topbar { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--surface) 96%, var(--page)); border-bottom: 1px solid var(--border); }
+  header { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; padding: 12px 0 4px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 30px; height: 30px; flex: none; }
+  .brand .wm { font: 700 15px/1.2 var(--brand); text-transform: uppercase; letter-spacing: .2em; white-space: nowrap; }
+  .brand .pg { font: 10.5px var(--mono); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+  .head-right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  nav.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  nav.tabs button { border: 0; background: none; color: var(--text-2); font: 500 14px var(--body); padding: 12px 12px 10px; cursor: pointer;
+    border-bottom: 2px solid transparent; white-space: nowrap; display: inline-flex; gap: 7px; align-items: center; }
+  nav.tabs button:hover { color: var(--text); }
+  nav.tabs button[aria-selected="true"] { color: var(--text); font-weight: 600; border-bottom-color: var(--accent); }
+  .count { background: var(--surface-3); color: var(--text-2); border-radius: 99px; padding: 1px 7px; font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  nav.tabs button[aria-selected="true"] .count { background: var(--accent-wash); color: var(--accent); }
+  main.wrap { padding-top: 24px; padding-bottom: 120px; }
+
+  /* building blocks */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px;
+    box-shadow: inset 0 1px 0 var(--highlight), var(--shadow); }
+  .card-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; row-gap: 2px; align-items: center; margin-bottom: 14px; }
+  .card-head > h2 { grid-column: 1; }
+  .card-head > .sub { grid-column: 1; }
+  .card-head > .right { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  h1 { font-size: 22px; margin: 0 0 4px; font-weight: 600; letter-spacing: -.02em; }
+  h2 { font-size: 15px; margin: 0; font-weight: 600; }
+  h3 { font-size: 13px; margin: 22px 0 10px; font-weight: 600; color: var(--text-2); }
+  .sub { color: var(--text-2); font-size: 13px; }
+  .muted { color: var(--muted); }
+  .hint { color: var(--text-2); font-size: 12.5px; margin-top: 10px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .spacer { flex: 1; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 14px; border-radius: 8px;
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: 500 13.5px/1.2 var(--body); cursor: pointer;
+    text-decoration: none; white-space: nowrap; transition: background-color .15s, border-color .15s; }
+  .btn:hover { background: var(--surface-2); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn.danger { color: var(--critical); }
+  .btn.danger:hover { background: var(--crit-wash); border-color: var(--critical); }
+  .btn.ghost { border-color: transparent; background: none; color: var(--text-2); }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+  .btn.sm { min-height: 30px; padding: 4px 11px; font-size: 13px; }
+  .btn.lg { min-height: 42px; padding: 8px 20px; font-size: 14.5px; }
+  input[type=text], input[type=password], input[type=search], input[type=url], select, textarea {
+    font: 14px/1.4 var(--body); color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+    padding: 8px 10px; min-height: 36px; min-width: 0; transition: border-color .15s, box-shadow .15s; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+  textarea { width: 100%; resize: vertical; }
+  #note { min-height: 260px; font: 13px/1.6 var(--mono); }
+  label.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
+  label.field small { font-weight: 400; color: var(--text-2); font-size: 12px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; padding: 2px 9px; border-radius: 99px;
+    background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+  .pill.good { color: var(--good); background: var(--good-wash); }
+  .pill.warn { color: var(--warning); background: var(--warn-wash); }
+  .pill.bad { color: var(--critical); background: var(--crit-wash); }
+  .pill.accent { color: var(--accent); background: var(--accent-wash); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+  .dot.on { background: var(--good); } .dot.bad { background: var(--critical); }
+  code, .mono { font-family: var(--mono); }
+  .callout { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13.5px; }
+  .callout.warn { background: var(--warn-wash); border-color: var(--warn-line); }
+  .callout.bad { background: var(--crit-wash); border-color: color-mix(in srgb, var(--critical) 40%, transparent); }
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+  .seg button { border: 0; background: none; color: var(--text-2); font: 500 13px var(--body); padding: 5px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 0 0 1px var(--border); }
+  details.fold { border-top: 1px solid var(--border); padding: 12px 0 0; margin-top: 14px; }
+  details.fold > summary { cursor: pointer; font-weight: 600; font-size: 14px; list-style: none; display: flex; align-items: center; gap: 8px; }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: ""; width: 7px; height: 7px; border: solid var(--muted); border-width: 0 1.5px 1.5px 0; transform: rotate(-45deg); transition: transform .15s; margin: 0 4px 0 2px; }
+  details.fold[open] > summary::before { transform: rotate(45deg); }
+  .empty { color: var(--text-2); text-align: center; padding: 28px 10px; }
+
+  /* test layout */
+  .test-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .options { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-top: 12px; }
+  .options .opt { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text-2); }
+  .waiting { display: flex; gap: 12px; align-items: center; color: var(--text-2); }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--accent-wash); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* results */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .list-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 720px) { .list-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .tile { background: var(--surface-2); border-radius: 12px; padding: 12px 14px; }
+  .tile .l { color: var(--text-2); font-size: 12.5px; }
+  .tile .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1.25; }
+  .tile .n { color: var(--muted); font-size: 12px; }
+  .card > .tiles .tile, .list-metrics .tile { background: var(--surface); border: 1px solid var(--border); box-shadow: inset 0 1px 0 var(--highlight), var(--shadow); }
+  .card .tiles .tile { background: var(--surface-2); border: 0; box-shadow: none; }
+  .codes { display: grid; gap: 12px; }
+  .cc { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: var(--surface); transition: border-color .15s, background-color .15s; }
+  .cc.v-correct { border-color: color-mix(in srgb, var(--good) 50%, transparent); }
+  .cc.v-wrong, .cc.v-replace { border-color: color-mix(in srgb, var(--critical) 50%, transparent); background: color-mix(in srgb, var(--crit-wash) 60%, var(--surface)); }
+  .cc-head { display: flex; gap: 12px; align-items: flex-start; }
+  .seq { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; font-size: 12px; font-weight: 600; margin-top: 2px; }
+  .cc-title { flex: 1; min-width: 0; }
+  .cc-code { font: 600 17px var(--mono); letter-spacing: .01em; }
+  .cc-desc { color: var(--text); font-size: 14px; }
+  .cc-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .cc-body { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 12px 0 0 38px; font-size: 13.5px; }
+  .cc-body dt { color: var(--muted); font-size: 12.5px; }
+  .cc-body dd { margin: 0; color: var(--text-2); }
+  .quote { display: block; font: 12.5px/1.5 var(--mono); background: var(--surface-2); border-left: 3px solid var(--border-strong); padding: 6px 10px; border-radius: 0 6px 6px 0; margin: 2px 0; white-space: pre-wrap; word-break: break-word; }
+  .cc-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 0 38px; }
+  .verdict button[data-v="correct"][aria-pressed="true"] { color: var(--good); }
+  .verdict button[data-v="wrong"][aria-pressed="true"], .verdict button[data-v="replace"][aria-pressed="true"] { color: var(--critical); }
+  .fix { display: grid; gap: 8px; margin: 10px 0 0 38px; }
+  .fix textarea { min-height: 60px; }
+  .codebox { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .codebox input { font-family: var(--mono); }
+  .code-check { font-size: 12.5px; min-height: 18px; color: var(--text-2); }
+  .code-check.ok { color: var(--good); } .code-check.warn { color: var(--warning); } .code-check.bad { color: var(--critical); }
+  .suggest { position: absolute; top: 40px; left: 0; right: 0; z-index: 8; list-style: none; margin: 0; padding: 4px; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow-pop); max-height: 300px; overflow: auto; min-width: 280px; }
+  .suggest li { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .suggest li b { font: 600 12.5px var(--mono); }
+  .suggest li.nb { opacity: .6; }
+  .suggest li:hover, .suggest li.sel { background: var(--accent-wash); }
+  .add-missed { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+  .item-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+  .item-list li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-size: 13.5px; }
+  .item-list li .grow { flex: 1; min-width: 0; }
+  .item-list li b.mono { font-size: 13.5px; }
+  .nc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 13.5px; }
+  .nc:first-child { border-top: 0; }
+  .nc .why { color: var(--text-2); font-size: 13px; grid-column: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+  tbody tr.click { cursor: pointer; }
+  tbody tr.click:hover td { background: var(--surface-2); }
+  pre.json { font: 12px/1.5 var(--mono); background: var(--surface-2); border-radius: 10px; padding: 12px; overflow: auto; max-height: 420px; }
+
+  /* sticky review bar */
+  .actionbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; background: var(--surface); border-top: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); }
+  .actionbar .wrap { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding-top: 12px; padding-bottom: 12px; }
+  .actionbar .tally { font-size: 13.5px; color: var(--text-2); }
+  .actionbar input { flex: 1 1 260px; }
+
+  /* dialogs, toasts */
+  dialog.dlg { border: 1px solid var(--border); border-radius: 16px; padding: 24px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); width: min(520px, calc(100vw - 32px)); }
+  dialog.dlg::backdrop { background: rgba(10, 12, 18, .5); }
+  dialog.dlg h2 { font-size: 17px; margin-bottom: 6px; }
+  dialog.dlg .row.end { justify-content: flex-end; margin-top: 20px; }
+  .form { display: grid; gap: 14px; margin-top: 14px; }
+  #toasts { position: fixed; right: 16px; bottom: 84px; z-index: 30; display: grid; gap: 8px; max-width: calc(100vw - 32px); }
+  .toast { padding: 11px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); font-size: 13.5px; animation: rise .2s ease-out; }
+  .toast.err { border-color: var(--critical); }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 720px) {
+    .wrap { padding: 0 16px; }
+    .cc-body, .cc-actions, .fix { margin-left: 0; }
+    .cc-body { grid-template-columns: 1fr; gap: 2px; }
+    .cc-body dd { margin-bottom: 6px; }
+    .add-missed { grid-template-columns: 1fr; }
+    .card-head { grid-template-columns: 1fr; }
+    .card-head > .right { grid-column: 1; grid-row: auto; justify-content: flex-start; margin-top: 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  /* ---------- About Orion: the "Powered by Orion" footer button and the About panel it opens.
+     Required in every Orion app (ORION-DESIGN.md §2a). The panel is always Night, whatever the app's mode. */
+  footer.orion-foot { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; padding: 36px 0 8px; text-align: center; }
+  .powered { display: inline-flex; flex-wrap: nowrap; white-space: nowrap; align-items: center; gap: 10px; margin: 0 auto; padding: 6px 16px 6px 8px; border-radius: 99px; border: 1px solid transparent;
+             background: none; cursor: pointer; color: var(--muted); font: 9.5px var(--mono); letter-spacing: .26em; text-transform: uppercase;
+             transition: color .2s, border-color .2s, background-color .2s; }
+  .powered svg { width: 34px; height: 34px; color: var(--text); flex: none; }
+  .powered svg line { opacity: .6; stroke-width: 1.4; }  /* small size: bolder lines so the constellation reads clearly */
+  .powered svg circle { transform-box: fill-box; transform-origin: center; transform: scale(1.7); }  /* and bigger stars */
+  .powered > span { white-space: nowrap; }
+  .powered b { font: 700 9.5px var(--brand); letter-spacing: .4em; color: var(--text-2); margin-right: -.4em; }
+  .powered:hover, .powered:focus-visible { color: var(--text); border-color: color-mix(in srgb, var(--rigel) 40%, transparent); background: var(--accent-wash); }
+  .powered:hover b { color: var(--text); }
+  .powered .zw { font-size: 0; letter-spacing: 0; }  /* hidden watermark: no width, or it pushes the label off-centre */
+  .orion line { stroke: currentColor; stroke-width: .9; stroke-linecap: round; opacity: .45; }
+  .orion circle { fill: currentColor; }
+  .orion .glow { opacity: .2; }
+  .orion .betelgeuse { fill: #ff8a5c; }
+  .orion .rigel { fill: #7aa2ff; }
+  .orion.twinkle circle:not(.glow) { animation: twinkle 3.2s ease-in-out 3; transform-box: fill-box; transform-origin: center; }
+  .orion.twinkle circle:nth-of-type(3n) { animation-delay: -1.1s; }
+  .orion.twinkle circle:nth-of-type(3n+1) { animation-delay: -2.2s; }
+  @keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  .orion.draw line { stroke-dasharray: 60; stroke-dashoffset: 60; animation: od-line .9s cubic-bezier(.6, 0, .2, 1) forwards; }
+  .orion.draw circle { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: od-star .5s cubic-bezier(.2, 1.6, .4, 1) forwards; }
+  @keyframes od-line { to { stroke-dashoffset: 0; } }
+  @keyframes od-star { to { transform: scale(1); } }
+
+  .orion-dlg { color-scheme: dark; width: min(460px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); padding: 0; overflow: auto;
+               border: 1px solid rgba(140, 185, 255, .22); border-radius: 20px; background: #0a0a0b; color: #ececee; box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+               font-family: var(--body); }
+  .orion-dlg::backdrop { background: rgba(4, 4, 6, .72); }
+  .orion-dlg[open] { animation: od-in .4s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes od-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+  @keyframes od-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .od-inner { padding: 30px 26px 22px; text-align: center; background: radial-gradient(120% 70% at 50% 0%, rgba(122, 162, 255, .16), transparent 70%); }
+  .od-mark svg { width: 168px; height: 168px; color: #fff; filter: drop-shadow(0 0 14px rgba(140, 185, 255, .35)); }
+  .od-word { font: 700 26px/1.2 var(--brand); letter-spacing: .5em; padding-left: .5em; margin-top: 12px; opacity: 0; animation: od-rise .6s .9s ease forwards; }
+  .od-product, .od-links, .od-copy, .od-close { opacity: 0; animation: od-rise .6s 1.2s ease forwards; }
+  .od-product { margin-top: 22px; padding: 16px 18px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, .09); background: rgba(255, 255, 255, .03); text-align: left; }
+  .od-logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 12px; }
+  .od-logo svg, .od-logo img { width: 34px; height: 34px; flex: none; }
+  .od-logo span { font: 700 16px var(--brand); letter-spacing: .2em; text-transform: uppercase; }
+  .od-facts { margin: 0; display: grid; }
+  .od-facts > div { display: flex; justify-content: space-between; gap: 14px; padding: 8px 0; border-top: 1px solid rgba(255, 255, 255, .07); font-size: 13.5px; }
+  .od-facts > div:first-child { border-top: 0; }
+  .od-facts dt { color: #84848b; font: 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; align-self: center; white-space: nowrap; }
+  .od-facts dd { margin: 0; text-align: right; color: #ececee; overflow-wrap: anywhere; }
+  .od-facts dd code { font: 12.5px var(--mono); background: none; border: 0; padding: 0; color: #ececee; }
+  .od-facts a { color: #7aa2ff; }
+  .od-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .od-links:empty { display: none; }
+  .orion-dlg nav.od-links { position: static; padding: 0; border: 0; background: none; overflow: visible; margin-left: 0; margin-right: 0; }  /* immune to the host page's nav styles */
+  .od-links a { font: 500 13px var(--body); color: #ececee; text-decoration: none; padding: 7px 14px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .15);
+                transition: background-color .2s, border-color .2s; }
+  .od-links a:hover { background: rgba(122, 162, 255, .12); border-color: rgba(122, 162, 255, .5); }
+  .od-copy { margin: 16px 0 0; font-size: 12px; color: #84848b; }
+  .od-close { margin-top: 14px; min-height: 34px; padding: 6px 20px; border-radius: 99px; border: 1px solid rgba(255, 255, 255, .2); background: none; color: #ececee;
+              font: 500 13px var(--body); cursor: pointer; }
+  .od-close:hover { background: rgba(255, 255, 255, .06); }
+  @media (prefers-reduced-motion: reduce) {
+    .orion-dlg, .orion-dlg * { animation: none !important; opacity: 1 !important; }
+    .orion.draw line { stroke-dashoffset: 0; } .orion.draw circle { transform: none; }
+  }
+
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="1.5" y="1.5" width="61" height="61" rx="9" fill="#0d0d0e" stroke="#2f2f34" stroke-width="2"/><path d="M20 14h17l9 9v27H20z" fill="none" stroke="#8cb9ff" stroke-width="4" stroke-linejoin="round"/><path d="M26 31h14M26 39h9" stroke="#8cb9ff" stroke-width="3.5" stroke-linecap="round" opacity=".7"/><circle cx="44" cy="46" r="7" fill="#f0a04b"/></svg>
+        <div><div class="wm">ICD-10 Coder</div><div class="pg">Test bench</div></div>
+      </div>
+      <div class="head-right">
+        <span class="pill" id="conn-pill"><span class="dot"></span><span>Not set up</span></span>
+        <button class="btn sm" id="open-settings" type="button">Settings</button>
+      </div>
+    </header>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" data-tab="test" aria-selected="true">Test a note</button>
+      <button role="tab" data-tab="list" aria-selected="false">Test list <span class="count" id="list-count">0</span></button>
+    </nav>
+  </div>
+</div>
+
+<main class="wrap">
+  <!-- ============================== TEST -->
+  <section id="tab-test" role="tabpanel">
+    <div class="card" id="welcome" hidden>
+      <h1>Welcome to the test bench</h1>
+      <p class="sub" style="max-width:720px">Paste a clinical note, let the ICD-10 coder suggest codes, then mark each code right or wrong and add any it missed.
+        Every note you check goes into your <b>test list</b>, which you export as a report and email to Triman.</p>
+      <p class="sub" style="max-width:720px">To start, enter your name and the <b>tester key</b> you were given.</p>
+      <button class="btn primary" type="button" data-open-settings>Enter my key</button>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Clinical note</h2>
+        <span class="sub">Paste the whole note as text, markdown or HTML. Use de-identified notes only.</span>
+        <span class="right"><button class="btn sm ghost" id="clear-note" type="button">Clear</button></span>
+      </div>
+      <textarea id="note" spellcheck="false" placeholder="Paste a clinical note here…" aria-label="Clinical note"></textarea>
+      <div class="options">
+        <span class="opt">Setting
+          <span class="seg" role="group" aria-label="Setting" id="opt-setting">
+            <button type="button" data-v="outpatient" aria-pressed="true">Office visit</button><button type="button" data-v="inpatient" aria-pressed="false">Hospital stay</button>
+          </span></span>
+        <span class="opt">Codes for
+          <span class="seg" role="group" aria-label="Scope" id="opt-scope">
+            <button type="button" data-v="auto" aria-pressed="true">This visit</button><button type="button" data-v="all" aria-pressed="false">Everything documented</button>
+          </span></span>
+        <span class="spacer"></span>
+        <button class="btn primary lg" id="fetch" type="button">Fetch codes</button>
+      </div>
+      <div class="waiting" id="waiting" hidden style="margin-top:14px"><span class="spinner"></span>
+        <span><b>Coding the note…</b> <span id="elapsed">0 s</span>. Usually 10–60 seconds; longer when the server is busy.</span>
+        <button class="btn sm ghost" id="cancel" type="button">Cancel</button></div>
+      <div class="callout bad" id="fetch-error" hidden style="margin-top:14px"></div>
+    </div>
+
+    <div id="result" hidden></div>
+  </section>
+
+  <!-- ============================== LIST -->
+  <section id="tab-list" role="tabpanel" hidden>
+    <div class="card-head" style="margin-bottom:16px">
+      <h1>Test list</h1>
+      <span class="sub">Every note you've checked, with the totals for your report. Click a row to open it again.</span>
+      <span class="right">
+        <button class="btn" id="copy-summary" type="button">Copy summary</button>
+        <button class="btn" id="export-json" type="button">Download data (JSON)</button>
+        <button class="btn primary" id="export-md" type="button">Download report</button>
+      </span>
+    </div>
+    <div class="tiles list-metrics" id="metrics"></div>
+    <p class="sub" id="metric-line" style="margin:-4px 0 16px"></p>
+    <div class="card">
+      <div class="table-wrap"><table id="cases"></table></div>
+      <div class="row" style="margin-top:14px">
+        <span class="hint" style="margin:0">Your list is kept in this browser until you clear it. Email the downloaded report to Triman.</span>
+        <span class="spacer"></span>
+        <button class="btn sm danger" id="clear-list" type="button">Clear list</button>
+      </div>
+    </div>
+    <details class="card fold" style="border-top:1px solid var(--border);padding:16px 20px">
+      <summary>What the numbers mean</summary>
+      <dl class="cc-body" style="margin:12px 0 0">
+        <dt>Accuracy</dt><dd>Of the codes the coder suggested, the share you marked correct (precision).</dd>
+        <dt>Completeness</dt><dd>Of all the codes the note needed (the correct ones plus the ones you added), the share the coder found (recall).</dd>
+        <dt>Overall score</dt><dd>Accuracy and completeness combined into one number (F1). 100% means every code right and none missing.</dd>
+        <dt>Notes fully right</dt><dd>Notes where you changed nothing.</dd>
+        <dt>Review flags</dt><dd>Of the codes you marked wrong, the share the coder had already flagged for a person to check.</dd>
+      </dl>
+    </details>
+  </section>
+
+  <footer class="orion-foot">
+  <button class="powered" type="button" data-orion-about aria-haspopup="dialog" aria-controls="orion-dlg"><svg class="orion twinkle" viewBox="-4 -4 108 108" aria-hidden="true"><line x1="24" y1="20" x2="48" y2="8"/><line x1="48" y1="8" x2="72" y2="24"/><line x1="24" y1="20" x2="42" y2="56"/><line x1="72" y1="24" x2="58" y2="50"/><line x1="42" y1="56" x2="50" y2="53"/><line x1="50" y1="53" x2="58" y2="50"/><line x1="42" y1="56" x2="30" y2="88"/><line x1="58" y1="50" x2="76" y2="84"/><circle class="glow" cx="48" cy="8" r="3.8"/><circle cx="48" cy="8" r="1.6"/><circle class="glow betelgeuse" cx="24" cy="20" r="8.2"/><circle class="betelgeuse" cx="24" cy="20" r="3.4"/><circle class="glow" cx="72" cy="24" r="5.8"/><circle cx="72" cy="24" r="2.4"/><circle class="glow" cx="58" cy="50" r="4.8"/><circle cx="58" cy="50" r="2"/><circle class="glow" cx="50" cy="53" r="5.3"/><circle cx="50" cy="53" r="2.2"/><circle class="glow" cx="42" cy="56" r="5.0"/><circle cx="42" cy="56" r="2.1"/><circle class="glow" cx="30" cy="88" r="5.5"/><circle cx="30" cy="88" r="2.3"/><circle class="glow rigel" cx="76" cy="84" r="7.4"/><circle class="rigel" cx="76" cy="84" r="3.1"/></svg><span>Powered by <b>Orion</b></span></button>
+</footer>
+</main>
+
+<div class="actionbar" id="actionbar" hidden>
+  <div class="wrap">
+    <span class="tally" id="tally"></span>
+    <input type="text" id="comment" placeholder="Comment on this note (optional)" aria-label="Comment on this note">
+    <button class="btn ghost" id="discard" type="button">Discard</button>
+    <button class="btn primary" id="add-case" type="button">Approve and add to list</button>
+  </div>
+</div>
+
+<dialog class="dlg" id="settings-dlg">
+  <form method="dialog" id="settings-form">
+    <h2>Settings</h2>
+    <p class="sub" style="margin:0">Kept only in this browser.</p>
+    <div class="form">
+      <label class="field">Your name<input type="text" id="s-name" autocomplete="name" placeholder="e.g. Priya"><small>Shown on your report.</small></label>
+      <label class="field">Tester key<input type="password" id="s-key" autocomplete="off" spellcheck="false" placeholder="sk-…"><small>The key Triman gave you. Don't share it.</small></label>
+      <details><summary class="sub" style="cursor:pointer">Server address</summary>
+        <label class="field" style="margin-top:10px"><input type="url" id="s-api" spellcheck="false"><small>Only change this if Triman asks you to.</small></label></details>
+      <div class="row"><button class="btn sm" id="s-test" type="button">Check connection</button><span class="sub" id="s-result"></span></div>
+    </div>
+    <div class="row end"><button class="btn" value="cancel" type="submit">Cancel</button><button class="btn primary" value="save" type="submit" id="s-save">Save</button></div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="confirm-dlg">
+  <form method="dialog">
+    <h2 id="c-title"></h2>
+    <p class="sub" id="c-body"></p>
+    <div class="row end"><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="ok" id="c-ok">OK</button></div>
+  </form>
+</dialog>
+
+<dialog id="orion-dlg" class="orion-dlg" aria-labelledby="od-word">
+  <div class="od-inner">
+    <div class="od-mark" data-mark><svg class="orion draw" viewBox="-4 -4 108 108" aria-hidden="true"><line x1="24" y1="20" x2="48" y2="8" style="animation-delay:0.05s"/><line x1="48" y1="8" x2="72" y2="24" style="animation-delay:0.12s"/><line x1="24" y1="20" x2="42" y2="56" style="animation-delay:0.19s"/><line x1="72" y1="24" x2="58" y2="50" style="animation-delay:0.26s"/><line x1="42" y1="56" x2="50" y2="53" style="animation-delay:0.33s"/><line x1="50" y1="53" x2="58" y2="50" style="animation-delay:0.40s"/><line x1="42" y1="56" x2="30" y2="88" style="animation-delay:0.47s"/><line x1="58" y1="50" x2="76" y2="84" style="animation-delay:0.54s"/><circle class="glow" cx="48" cy="8" r="3.8" style="animation-delay:0.35s"/><circle cx="48" cy="8" r="1.6" style="animation-delay:0.35s"/><circle class="glow betelgeuse" cx="24" cy="20" r="8.2" style="animation-delay:0.41s"/><circle class="betelgeuse" cx="24" cy="20" r="3.4" style="animation-delay:0.41s"/><circle class="glow" cx="72" cy="24" r="5.8" style="animation-delay:0.47s"/><circle cx="72" cy="24" r="2.4" style="animation-delay:0.47s"/><circle class="glow" cx="58" cy="50" r="4.8" style="animation-delay:0.53s"/><circle cx="58" cy="50" r="2" style="animation-delay:0.53s"/><circle class="glow" cx="50" cy="53" r="5.3" style="animation-delay:0.59s"/><circle cx="50" cy="53" r="2.2" style="animation-delay:0.59s"/><circle class="glow" cx="42" cy="56" r="5.0" style="animation-delay:0.65s"/><circle cx="42" cy="56" r="2.1" style="animation-delay:0.65s"/><circle class="glow" cx="30" cy="88" r="5.5" style="animation-delay:0.71s"/><circle cx="30" cy="88" r="2.3" style="animation-delay:0.71s"/><circle class="glow rigel" cx="76" cy="84" r="7.4" style="animation-delay:0.77s"/><circle class="rigel" cx="76" cy="84" r="3.1" style="animation-delay:0.77s"/></svg></div>
+    <div class="od-word" id="od-word">ORION</div>
+    <div class="od-product">
+      <div class="od-logo"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="1.5" y="1.5" width="61" height="61" rx="9" fill="#0d0d0e" stroke="#2f2f34" stroke-width="2"/><path d="M20 14h17l9 9v27H20z" fill="none" stroke="#8cb9ff" stroke-width="4" stroke-linejoin="round"/><path d="M26 31h14M26 39h9" stroke="#8cb9ff" stroke-width="3.5" stroke-linecap="round" opacity=".7"/><circle cx="44" cy="46" r="7" fill="#f0a04b"/></svg><span>ICD-10 Coder</span></div>
+      <dl class="od-facts">
+        <div><dt>Made by</dt><dd>Triman Bhullar</dd></div>
+        <div><dt>Version</dt><dd data-od-version>–</dd></div>
+        <div><dt>Build</dt><dd><code data-od-build>–</code></dd></div>
+        <div><dt>Code set</dt><dd>ICD-10-CM FY2027</dd></div>
+        <div><dt>Runs on</dt><dd>Any modern browser</dd></div>
+        <!-- <div><dt>Customer care</dt><dd><a href="mailto:…">…</a></dd></div> -->
+      </dl>
+    </div>
+    <nav class="od-links"></nav>
+    <p class="od-copy">© <span data-od-year>2026</span> Triman Bhullar. All rights reserved.</p>
+    <button class="od-close" type="button" data-close>Close</button>
+  </div>
+</dialog>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+const APP = { version: "1.0.0", build: "67691f927b3a" };
+const MODEL = "icd10-cm-coder";
+// on the gateway PC (served by the coder at /ui/test-bench/) notes go through the local gateway, so usage is still counted
+const LOCAL = ["127.0.0.1", "localhost"].includes(location.hostname);
+const DEFAULT_API = LOCAL ? "http://127.0.0.1:8080/v1" : "https://x8.tailf4b79c.ts.net/v1";
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pct = (v) => (v == null ? "–" : (v * 100).toFixed(1) + "%");
+const ratio = (a, b) => (b ? a / b : null);
+const fmtSec = (ms) => (ms == null ? "–" : ms < 60000 ? (ms / 1000).toFixed(1) + " s" : Math.floor(ms / 60000) + " min " + Math.round((ms % 60000) / 1000) + " s");
+const fmtDate = (t) => new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+const local = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} },
+};
+
+function toast(msg, kind = "") {
+  const el = document.createElement("div");
+  el.className = "toast " + kind; el.textContent = msg;
+  $("#toasts").append(el);
+  setTimeout(() => el.remove(), kind === "err" ? 6000 : 3200);
+}
+function confirmBox(title, body, ok = "OK", danger = false) {
+  return new Promise((resolve) => {
+    const d = $("#confirm-dlg");
+    $("#c-title").textContent = title; $("#c-body").textContent = body;
+    $("#c-ok").textContent = ok; $("#c-ok").className = "btn " + (danger ? "danger" : "primary");
+    d.returnValue = "cancel";
+    d.onclose = () => resolve(d.returnValue === "ok");
+    d.showModal();
+  });
+}
+
+// ---------------------------------------------------------------- storage: the test list lives in this browser (IndexedDB)
+
+const db = (() => {
+  let opening = null, memory = new Map();
+  const open = () => opening ||= new Promise((res, rej) => {
+    const r = indexedDB.open("icd10-test-bench", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("cases", { keyPath: "id" });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+  const run = async (mode, fn) => {
+    try {
+      const d = await open();
+      return await new Promise((res, rej) => {
+        const t = d.transaction("cases", mode), req = fn(t.objectStore("cases"));
+        t.oncomplete = () => res(req && req.result);
+        t.onerror = () => rej(t.error);
+      });
+    } catch {  // private windows without storage: keep the list for this visit only
+      if (!run.warned) { run.warned = true; toast("This browser won't store your list; it lasts until you close the page.", "err"); }
+      return null;
+    }
+  };
+  return {
+    async all() { const r = await run("readonly", (s) => s.getAll()); return r || [...memory.values()]; },
+    async put(c) { memory.set(c.id, c); await run("readwrite", (s) => s.put(c)); },
+    async del(id) { memory.delete(id); await run("readwrite", (s) => s.delete(id)); },
+    async clear() { memory.clear(); await run("readwrite", (s) => s.clear()); },
+  };
+})();
+
+// ---------------------------------------------------------------- settings and connection
+
+let settings = { name: "", key: "", api: DEFAULT_API, ...local.get("tb-settings", {}) };
+if (LOCAL && settings.api !== DEFAULT_API && /127\.0\.0\.1:8093/.test(settings.api)) settings.api = DEFAULT_API;  // the old preview address
+function renderConn() {
+  const ok = !!settings.key;
+  $("#conn-pill").className = "pill " + (ok ? "good" : "warn");
+  $("#conn-pill").innerHTML = `<span class="dot ${ok ? "on" : ""}"></span><span>${ok ? esc(settings.name || "Tester") : "Not set up"}</span>`;
+  $("#welcome").hidden = ok;
+}
+function openSettings() {
+  $("#s-name").value = settings.name; $("#s-key").value = settings.key; $("#s-api").value = settings.api;
+  $("#s-result").textContent = "";
+  $("#settings-dlg").showModal();
+}
+$("#open-settings").onclick = openSettings;
+document.addEventListener("click", (e) => { if (e.target.closest("[data-open-settings]")) openSettings(); });
+$("#settings-dlg").addEventListener("close", () => {
+  if ($("#settings-dlg").returnValue !== "save") return;
+  settings = { name: $("#s-name").value.trim(), key: $("#s-key").value.trim(), api: ($("#s-api").value.trim() || DEFAULT_API).replace(/\/+$/, "") };
+  local.set("tb-settings", settings);
+  renderConn();
+  toast("Settings saved.");
+});
+$("#s-test").onclick = async () => {
+  const api = ($("#s-api").value.trim() || DEFAULT_API).replace(/\/+$/, ""), key = $("#s-key").value.trim();
+  $("#s-result").textContent = "Checking…";
+  try {
+    const r = await fetch(api + "/models", { headers: { Authorization: "Bearer " + key } });
+    if (r.status === 401) throw new Error("the key wasn't accepted");
+    if (r.status === 403) throw new Error("this key is paused; ask Triman");
+    if (!r.ok) throw new Error("the server answered " + r.status);
+    const ids = ((await r.json()).data || []).map((m) => m.id);
+    $("#s-result").textContent = ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but the coder isn't switched on for this key.";
+  } catch (err) {
+    $("#s-result").textContent = "Couldn't connect: " + (err.message === "Failed to fetch" ? "the server can't be reached right now" : err.message) + ".";
+  }
+};
+
+// ---------------------------------------------------------------- tabs
+
+function showTab(name) {
+  $$("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
+  $("#tab-test").hidden = name !== "test";
+  $("#tab-list").hidden = name !== "list";
+  $("#actionbar").hidden = name !== "test" || !cur;
+  if (name === "list") renderList();
+  if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
+}
+$$("nav.tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- the code list (for checking codes typed by testers)
+
+let CODES = null;
+async function loadCodes() {
+  if (CODES) return CODES;
+  const text = await (await fetch("codes.tsv")).text();
+  const map = new Map(), list = [];
+  for (const line of text.split("\n")) {
+    const [c, t, b] = line.split("\t");
+    if (!c) continue;
+    const e = { c, t, b: b === "1", k: c.replace(".", ""), low: t.toLowerCase() };
+    map.set(c, e); list.push(e);
+  }
+  return (CODES = { map, list });
+}
+function normCode(s) {
+  let c = String(s || "").toUpperCase().replace(/[^A-Z0-9.]/g, "");
+  if (!c.includes(".") && c.length > 3) c = c.slice(0, 3) + "." + c.slice(3);
+  return c;
+}
+function searchCodes(q) {
+  if (!CODES) return [];
+  q = q.trim();
+  if (!q) return [];
+  if (/^[A-Za-z]\d/.test(q)) {
+    const k = q.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return CODES.list.filter((e) => e.k.startsWith(k)).sort((a, b) => b.b - a.b || a.k.length - b.k.length).slice(0, 10);
+  }
+  const words = q.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  if (!words.length) return [];
+  const out = [];
+  for (const e of CODES.list) {
+    if (e.b && words.every((w) => e.low.includes(w))) { out.push(e); if (out.length >= 60) break; }
+  }
+  return out.sort((a, b) => a.t.length - b.t.length).slice(0, 10);
+}
+/** Explains a typed code: its title, or why it can't be used. */
+function checkCode(raw) {
+  const c = normCode(raw);
+  if (!c) return { code: "", cls: "", text: "" };
+  if (!CODES) return { code: c, cls: "", text: "Checking…" };
+  const e = CODES.map.get(c);
+  if (!e) return { code: c, cls: "bad", text: `${c} isn't an ICD-10-CM code.` };
+  if (!e.b) return { code: c, cls: "warn", text: `${c} ${e.t}: not billable (it needs more characters).`, title: e.t };
+  return { code: c, cls: "ok", text: `${c} · ${e.t}`, title: e.t, ok: true };
+}
+/** Wires a code input: suggestions while typing, and a check line under it. */
+function codeInput(input, check, onPick) {
+  const box = input.closest(".codebox");
+  let list = null, sel = -1, items = [];
+  const close = () => { list?.remove(); list = null; sel = -1; };
+  const update = () => {
+    const r = checkCode(input.value);
+    check.className = "code-check " + r.cls;
+    check.textContent = input.value.trim() ? r.text : "";
+    onPick?.(r);
+  };
+  const pick = (e) => { input.value = e.c; close(); update(); };
+  const show = async () => {
+    await loadCodes();
+    items = searchCodes(input.value);
+    if (!items.length || (items.length === 1 && items[0].c === normCode(input.value))) { close(); update(); return; }
+    if (!list) { list = document.createElement("ul"); list.className = "suggest"; box.append(list); }
+    list.innerHTML = items.map((e, i) => `<li data-i="${i}" class="${e.b ? "" : "nb"}"><b>${esc(e.c)}</b><span>${esc(e.t)}</span></li>`).join("");
+    list.onmousedown = (ev) => { const li = ev.target.closest("li"); if (li) { ev.preventDefault(); pick(items[+li.dataset.i]); } };
+    update();
+  };
+  input.addEventListener("focus", () => loadCodes().then(update));
+  input.addEventListener("input", show);
+  input.addEventListener("blur", () => setTimeout(() => { close(); if (/^[A-Za-z]\d/.test(input.value.trim())) { input.value = normCode(input.value); update(); } }, 120));
+  input.addEventListener("keydown", (ev) => {
+    if (!list) return;
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      sel = (sel + (ev.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+      $$("li", list).forEach((li, i) => li.classList.toggle("sel", i === sel));
+    } else if (ev.key === "Enter" && sel >= 0) { ev.preventDefault(); pick(items[sel]); }
+    else if (ev.key === "Escape") close();
+  });
+  return update;
+}
+
+// ---------------------------------------------------------------- fetching codes
+
+let cur = local.get("tb-draft", null);  // the note being reviewed (kept if the page reloads)
+let controller = null, timer = null;
+const option = (id) => $(`#${id} button[aria-pressed="true"]`).dataset.v;
+$$(".options .seg").forEach((seg) => seg.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  $$("button", seg).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+}));
+$("#clear-note").onclick = () => { $("#note").value = ""; $("#note").focus(); };
+$("#cancel").onclick = () => controller?.abort();
+
+async function fetchCodes() {
+  const note = $("#note").value.trim();
+  if (!note) { toast("Paste a note first.", "err"); $("#note").focus(); return; }
+  if (!settings.key) { openSettings(); return; }
+  if (cur && !cur.saved && Object.keys(cur.reviews).length + cur.missed.length > 0
+      && !(await confirmBox("Start a new note?", "Your checks on the current note haven't been added to the list yet. Starting a new note discards them.", "Discard and continue", true))) return;
+  $("#fetch").disabled = true; $("#fetch-error").hidden = true; $("#waiting").hidden = false;
+  const t0 = performance.now();
+  timer = setInterval(() => { $("#elapsed").textContent = Math.round((performance.now() - t0) / 1000) + " s"; }, 500);
+  controller = new AbortController();
+  const limit = setTimeout(() => controller.abort("timeout"), 15 * 60 * 1000);
+  try {
+    const r = await fetch(settings.api + "/chat/completions", {
+      method: "POST", signal: controller.signal,
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + settings.key },
+      body: JSON.stringify({ model: MODEL, messages: [{ role: "user", content: note }], setting: option("opt-setting"), scope: option("opt-scope") }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = body?.error?.message || "";
+      if (r.status === 401) throw new Error("Your tester key wasn't accepted. Check it in Settings.");
+      if (r.status === 403) throw new Error("Your tester key is paused. Ask Triman to switch it back on.");
+      if (r.status === 423) throw new Error("Testing is switched off right now. " + msg);
+      if (r.status === 503 || r.status === 429) {
+        const wait = r.headers.get("Retry-After");
+        throw new Error("The server is busy" + (wait ? `; try again in about ${wait} seconds` : "; try again shortly") + ". " + msg);
+      }
+      throw new Error(`The server answered ${r.status}. ${msg}`);
+    }
+    const result = JSON.parse(body.choices[0].message.content);
+    cur = { id: crypto.randomUUID(), created: Date.now(), note, options: { setting: option("opt-setting"), scope: option("opt-scope") },
+            result, ms: Math.round(performance.now() - t0), model: body.model || MODEL, reviews: {}, missed: [], comment: "", saved: false };
+    local.set("tb-draft", cur);
+    renderResult();
+    $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    const text = err?.name === "AbortError" || err === "timeout"
+      ? (controller.signal.reason === "timeout" ? "No answer after 15 minutes. Try again later." : "Cancelled.")
+      : err.message === "Failed to fetch" ? "The coding server can't be reached right now. Check your internet connection and try again in a minute."
+      : err instanceof SyntaxError ? "The server's answer couldn't be read. Try again; if it keeps happening, tell Triman."
+      : err.message;
+    $("#fetch-error").textContent = text; $("#fetch-error").hidden = false;
+  } finally {
+    clearTimeout(limit); clearInterval(timer);
+    $("#fetch").disabled = false; $("#waiting").hidden = true; controller = null;
+  }
+}
+$("#fetch").onclick = fetchCodes;
+$("#note").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) fetchCodes(); });
+
+// ---------------------------------------------------------------- scoring
+
+/** Counts for one checked note. Codes not marked count as correct. */
+function tally(c) {
+  const t = { suggested: 0, correct: 0, wrong: 0, missed: 0, flagged: 0, flaggedWrong: 0, sameCategory: 0 };
+  for (const x of c.result.codes || []) {
+    t.suggested++;
+    const r = c.reviews[x.code];
+    if (x.needs_review) t.flagged++;
+    if (r && r.verdict !== "correct") {
+      t.wrong++;
+      if (x.needs_review) t.flaggedWrong++;
+      if (r.verdict === "replace" && r.with) { t.missed++; if (r.with.slice(0, 3) === x.code.slice(0, 3)) t.sameCategory++; }
+    } else t.correct++;
+  }
+  t.missed += c.missed.length;
+  t.exact = t.wrong === 0 && t.missed === 0;
+  return t;
+}
+function totals(list) {
+  const s = { notes: list.length, suggested: 0, correct: 0, wrong: 0, missed: 0, flagged: 0, flaggedWrong: 0, sameCategory: 0, exact: 0, ms: [] };
+  for (const c of list) {
+    const t = tally(c);
+    for (const k of ["suggested", "correct", "wrong", "missed", "flagged", "flaggedWrong", "sameCategory"]) s[k] += t[k];
+    if (t.exact) s.exact++;
+    if (c.ms) s.ms.push(c.ms);
+  }
+  s.precision = ratio(s.correct, s.correct + s.wrong);
+  s.recall = ratio(s.correct, s.correct + s.missed);
+  s.f1 = s.precision != null && s.recall != null && s.precision + s.recall ? 2 * s.precision * s.recall / (s.precision + s.recall) : null;
+  s.exactRate = ratio(s.exact, s.notes);
+  s.flagCatch = ratio(s.flaggedWrong, s.wrong);
+  const ms = [...s.ms].sort((a, b) => a - b);
+  s.avgMs = ms.length ? ms.reduce((a, b) => a + b, 0) / ms.length : null;
+  s.medianMs = ms.length ? ms[Math.floor(ms.length / 2)] : null;
+  return s;
+}
+
+// ---------------------------------------------------------------- results and review
+
+const CONF = { high: "good", medium: "warn", low: "bad" };
+function codeCard(x) {
+  const r = cur.reviews[x.code] || {};
+  const v = r.verdict || "";
+  const written = (x.written || []).filter((w, i, a) => a.indexOf(w) === i);
+  const pills = [
+    x.confidence ? `<span class="pill ${CONF[x.confidence] || ""}">${esc(x.confidence)} confidence</span>` : "",
+    x.needs_review ? `<span class="pill warn">Flagged for review</span>` : "",
+    written.length ? `<span class="pill">Written in note: ${esc(written.join(", "))}</span>` : `<span class="pill accent">Added by the coder</span>`,
+    x.status && x.status !== "confirmed" ? `<span class="pill">${esc(x.status)}</span>` : "",
+  ].join("");
+  const rows = [
+    x.condition ? `<dt>Condition</dt><dd>${esc(x.condition)}</dd>` : "",
+    x.reason ? `<dt>Why</dt><dd>${esc(x.reason)}</dd>` : "",
+    x.correction ? `<dt>Correction</dt><dd>${esc(x.correction)}</dd>` : "",
+    (x.review_reasons || []).length ? `<dt>Check this</dt><dd>${x.review_reasons.map(esc).join("<br>")}</dd>` : "",
+    (x.evidence || []).length ? `<dt>From the note</dt><dd>${x.evidence.map((q) => `<span class="quote">${esc(q)}</span>`).join("")}</dd>` : "",
+    (x.sections || []).length ? `<dt>Sections</dt><dd>${esc(x.sections.map(sectionName).join(", "))}</dd>` : "",
+  ].join("");
+  return `<article class="cc ${v ? "v-" + v : ""}" data-code="${esc(x.code)}">
+    <div class="cc-head"><span class="seq">${x.sequence ?? ""}</span>
+      <div class="cc-title"><div class="cc-code">${esc(x.code)}</div><div class="cc-desc">${esc(x.description)}</div><div class="cc-pills">${pills}</div></div></div>
+    <dl class="cc-body">${rows}</dl>
+    <div class="cc-actions">
+      <span class="seg verdict" role="group" aria-label="Is ${esc(x.code)} right?">
+        <button type="button" data-v="correct" aria-pressed="${v === "correct"}">✓ Correct</button>
+        <button type="button" data-v="wrong" aria-pressed="${v === "wrong"}">✗ Wrong, shouldn't be coded</button>
+        <button type="button" data-v="replace" aria-pressed="${v === "replace"}">↺ Should be a different code</button>
+      </span>
+    </div>
+    <div class="fix" ${v === "wrong" || v === "replace" ? "" : "hidden"}>
+      <div class="codebox" ${v === "replace" ? "" : "hidden"}><input type="text" class="fix-code" placeholder="The right code, e.g. E11.42, or search by words" value="${esc(r.with || "")}" aria-label="The right code"><div class="code-check"></div></div>
+      <textarea class="fix-reason" placeholder="Why? What in the note shows this (required)" aria-label="Reason">${esc(r.reason || "")}</textarea>
+    </div>
+  </article>`;
+}
+function sectionName(id) {
+  const s = (cur.result.sections || []).find((x) => x.id === id);
+  return s ? s.title || id : id;
+}
+function renderResult() {
+  const box = $("#result");
+  if (!cur) { box.hidden = true; $("#actionbar").hidden = true; return; }
+  const res = cur.result, codes = res.codes || [], nc = res.not_coded || [], edges = res.edge_cases || [], secs = res.sections || [];
+  const flagged = codes.filter((x) => x.needs_review).length;
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="card">
+      <div class="card-head"><h2>What the coder found</h2>
+        <span class="sub">${cur.saved ? "In your test list. Changes you make here are saved when you press Save changes." : "Check each code, add any it missed, then add the note to your test list."}</span>
+        <span class="right"><span class="pill">${esc(res.code_set || "ICD-10-CM")}</span></span></div>
+      <div class="tiles">
+        <div class="tile"><div class="l">Codes suggested</div><div class="v">${codes.length}</div><div class="n">in billing order</div></div>
+        <div class="tile"><div class="l">Flagged for review</div><div class="v">${flagged}</div><div class="n">${res.needs_review ? "the coder wants a person to check" : "nothing to check"}</div></div>
+        <div class="tile"><div class="l">Not coded</div><div class="v">${nc.length}</div><div class="n">conditions left out, with why</div></div>
+        <div class="tile"><div class="l">Time taken</div><div class="v">${fmtSec(cur.ms)}</div><div class="n">${esc(cur.options.setting === "inpatient" ? "hospital stay" : "office visit")} · ${esc(cur.options.scope === "all" ? "everything documented" : "this visit")}</div></div>
+      </div>
+      <div class="row" style="margin-bottom:10px"><span class="sub">Mark each code. Codes you don't mark count as correct.</span><span class="spacer"></span>
+        <button class="btn sm" type="button" id="all-correct">Mark all unmarked as correct</button></div>
+      <div class="codes">${codes.map(codeCard).join("") || '<div class="empty">The coder found no codes for this note.</div>'}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Codes the coder missed</h2><span class="sub">Add each code the note needs that isn't in the list above, with the reason.</span></div>
+      <div class="add-missed">
+        <div class="codebox"><input type="text" id="m-code" placeholder="Code or words, e.g. E11.42" aria-label="Missed code"><div class="code-check" id="m-check"></div></div>
+        <input type="text" id="m-reason" placeholder="Why it should be coded (what in the note supports it)" aria-label="Reason">
+        <button class="btn" type="button" id="m-add">Add missed code</button>
+      </div>
+      <ul class="item-list" id="missed"></ul>
+    </div>
+
+    <div class="card">
+      <details class="fold" style="border:0;margin:0;padding:0" ${nc.length ? "open" : ""}>
+        <summary>Not coded, and why <span class="count">${nc.length}</span></summary>
+        <div style="margin-top:8px">${nc.map((n, i) => `<div class="nc"><div><b>${esc(n.condition)}</b> <span class="pill">${esc(n.status || "")}</span>
+          ${n.evidence ? `<span class="quote">${esc(n.evidence)}</span>` : ""}</div>
+          <div><button class="btn sm" type="button" data-should="${i}">Should be coded</button></div>
+          <div class="why">${esc(n.why)}</div></div>`).join("") || '<div class="sub">Nothing was left out.</div>'}</div>
+      </details>
+      <details class="fold">
+        <summary>Checks on codes written in the note <span class="count">${edges.length}</span></summary>
+        <div class="item-list" style="margin-top:10px">${edges.map((e) => `<li><span class="pill ${e.severity === "error" ? "bad" : e.severity === "warning" ? "warn" : ""}">${esc(e.severity || "note")}</span>
+          <span class="grow">${esc(e.message)}</span></li>`).join("") || '<div class="sub">No problems found.</div>'}</div>
+      </details>
+      <details class="fold">
+        <summary>Sections the coder found <span class="count">${secs.length}</span></summary>
+        <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Section</th><th>Kind</th><th>Codes written there</th><th>Used for coding</th></tr></thead>
+          <tbody>${secs.map((s) => `<tr><td>${esc(s.title || s.id)}</td><td class="muted">${esc(s.type || "")}</td>
+          <td class="mono">${esc((s.written_codes || []).map((w) => w.as_written).join(", "))}</td><td>${s.coding_source ? "Yes" : ""}</td></tr>`).join("")}</tbody></table></div>
+      </details>
+      <details class="fold">
+        <summary>Full answer from the coder (for experts)</summary>
+        <pre class="json">${esc(JSON.stringify(res, null, 2))}</pre>
+      </details>
+    </div>`;
+  // per-code review
+  $$(".cc", box).forEach((card) => {
+    const code = card.dataset.code;
+    const fixCode = $(".fix-code", card), check = $(".code-check", card);
+    const update = codeInput(fixCode, check, (r) => { const rv = cur.reviews[code]; if (rv && rv.verdict === "replace") { rv.with = r.ok || r.title ? r.code : ""; changed(); } });
+    if (fixCode.value) loadCodes().then(update);
+    $(".fix-reason", card).addEventListener("input", (e) => { if (cur.reviews[code]) { cur.reviews[code].reason = e.target.value; changed(); } });
+  });
+  box.onclick = (e) => {
+    const vb = e.target.closest(".verdict button");
+    if (vb) {
+      const card = vb.closest(".cc"), code = card.dataset.code, v = vb.dataset.v;
+      const prev = cur.reviews[code] || {};
+      if (prev.verdict === v) delete cur.reviews[code];  // clicking the chosen one again unmarks it
+      else cur.reviews[code] = { ...prev, verdict: v };
+      const now = cur.reviews[code]?.verdict || "";
+      card.className = "cc " + (now ? "v-" + now : "");
+      $$(".verdict button", card).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === now)));
+      $(".fix", card).hidden = !(now === "wrong" || now === "replace");
+      $(".codebox", card).hidden = now !== "replace";
+      if (now === "wrong" || now === "replace") ($(now === "replace" ? ".fix-code" : ".fix-reason", card)).focus();
+      changed();
+      return;
+    }
+    const sh = e.target.closest("[data-should]");
+    if (sh) {
+      const n = cur.result.not_coded[+sh.dataset.should];
+      $("#m-reason").value = `Not coded by the coder ("${n.condition}"), but it should be: `;
+      $("#m-code").value = n.condition;
+      $("#m-code").scrollIntoView({ behavior: "smooth", block: "center" });
+      $("#m-code").focus(); $("#m-code").dispatchEvent(new Event("input"));
+    }
+  };
+  $("#all-correct").onclick = () => {
+    for (const x of codes) if (!cur.reviews[x.code]) cur.reviews[x.code] = { verdict: "correct" };
+    renderResult(); changed();
+  };
+  // missed codes
+  let missedPick = {};
+  codeInput($("#m-code"), $("#m-check"), (r) => { missedPick = r; });
+  $("#m-add").onclick = async () => {
+    await loadCodes();
+    const r = checkCode($("#m-code").value), reason = $("#m-reason").value.trim();
+    if (!r.title) { toast(r.code ? `${r.code} isn't an ICD-10-CM code.` : "Type the missed code first.", "err"); $("#m-code").focus(); return; }
+    if (!reason) { toast("Add the reason: what in the note supports this code.", "err"); $("#m-reason").focus(); return; }
+    if ((cur.result.codes || []).some((x) => x.code === r.code)) { toast(`${r.code} is already in the coder's list above.`, "err"); return; }
+    if (cur.missed.some((m) => m.code === r.code)) { toast(`${r.code} is already in your missed list.`, "err"); return; }
+    cur.missed.push({ code: r.code, title: r.title, billable: r.ok === true, reason });
+    $("#m-code").value = ""; $("#m-reason").value = ""; $("#m-check").textContent = "";
+    renderMissed(); changed();
+  };
+  $("#m-reason").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#m-add").click(); });
+  renderMissed();
+  $("#comment").value = cur.comment || "";
+  changed(false);
+}
+function renderMissed() {
+  $("#missed").innerHTML = cur.missed.map((m, i) => `<li><b class="mono">${esc(m.code)}</b><span class="grow"><b>${esc(m.title)}</b>${m.billable ? "" : ' <span class="pill warn">not billable</span>'}<br>
+    <span class="sub">${esc(m.reason)}</span></span><button class="btn sm ghost" type="button" data-unmiss="${i}" aria-label="Remove ${esc(m.code)}">Remove</button></li>`).join("");
+  $("#missed").onclick = (e) => { const b = e.target.closest("[data-unmiss]"); if (b) { cur.missed.splice(+b.dataset.unmiss, 1); renderMissed(); changed(); } };
+}
+/** Keeps the draft, the tally and the main button in step with the review. */
+function changed(store = true) {
+  if (!cur) return;
+  if (store) local.set("tb-draft", cur);
+  const t = tally(cur), marked = Object.keys(cur.reviews).length;
+  $("#tally").innerHTML = `<b>${t.suggested}</b> codes · ${marked} marked · <span style="color:var(--critical)">${t.wrong} wrong</span> · <span style="color:var(--warning)">${t.missed} missed</span>`;
+  $("#add-case").textContent = cur.saved ? "Save changes" : t.wrong || t.missed ? `Add to list with ${t.wrong + t.missed} correction${t.wrong + t.missed === 1 ? "" : "s"}` : "Approve and add to list";
+  $("#actionbar").hidden = $("#tab-test").hidden;
+}
+$("#comment").addEventListener("input", (e) => { if (cur) { cur.comment = e.target.value; local.set("tb-draft", cur); } });
+$("#discard").onclick = async () => {
+  if (!cur) return;
+  if (!cur.saved && (Object.keys(cur.reviews).length || cur.missed.length)
+      && !(await confirmBox("Discard this note?", "Your checks on this note will be lost. The note text stays in the box.", "Discard", true))) return;
+  cur = null; local.del("tb-draft"); renderResult();
+};
+$("#add-case").onclick = async () => {
+  if (!cur) return;
+  for (const [code, r] of Object.entries(cur.reviews)) {
+    if (r.verdict === "correct") continue;
+    if (!r.reason?.trim()) { toast(`Add the reason for ${code}.`, "err"); $(`.cc[data-code="${CSS.escape(code)}"] .fix-reason`)?.focus(); return; }
+    if (r.verdict === "replace" && !r.with) { toast(`Type the right code for ${code}, or choose "Wrong" instead.`, "err"); $(`.cc[data-code="${CSS.escape(code)}"] .fix-code`)?.focus(); return; }
+  }
+  const wasSaved = cur.saved;
+  cur.saved = true; cur.updated = Date.now(); cur.tester = settings.name;
+  await db.put(structuredClone(cur));
+  toast(wasSaved ? "Changes saved." : "Added to your test list.");
+  cur = null; local.del("tb-draft");
+  renderResult(); refreshCount();
+  if (!wasSaved) { $("#note").value = ""; $("#note").focus(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  else showTab("list");
+};
+
+// ---------------------------------------------------------------- the test list
+
+async function refreshCount() { $("#list-count").textContent = (await db.all()).length; }
+function metricTiles(s) {
+  return `
+    <div class="tile"><div class="l">Overall score</div><div class="v">${pct(s.f1)}</div><div class="n">accuracy and completeness together</div></div>
+    <div class="tile"><div class="l">Accuracy</div><div class="v">${pct(s.precision)}</div><div class="n">${s.correct} correct · ${s.wrong} wrong</div></div>
+    <div class="tile"><div class="l">Completeness</div><div class="v">${pct(s.recall)}</div><div class="n">${s.missed} missed</div></div>
+    <div class="tile"><div class="l">Notes fully right</div><div class="v">${pct(s.exactRate)}</div><div class="n">${s.exact} of ${s.notes} notes</div></div>`;
+}
+function metricLine(s) {
+  return `${s.notes} note${s.notes === 1 ? "" : "s"} checked · ${s.suggested} codes suggested · review flags caught ${pct(s.flagCatch)} of the wrong codes`
+    + ` · ${fmtSec(s.medianMs)} per note (median), ${fmtSec(s.avgMs)} average`;
+}
+const firstLine = (t) => (t.split("\n").map((l) => l.trim()).find((l) => l && !/^<[^>]+>$/.test(l)) || "").replace(/<[^>]+>/g, "").replace(/^[#>*\-\s]+/, "").slice(0, 90);
+async function renderList() {
+  const list = (await db.all()).sort((a, b) => a.created - b.created);
+  $("#list-count").textContent = list.length;
+  const s = totals(list);
+  $("#metrics").innerHTML = metricTiles(s);
+  $("#metric-line").textContent = list.length ? metricLine(s) : "";
+  $("#cases").innerHTML = list.length ? `<thead><tr><th>#</th><th>Note</th><th class="num">Codes</th><th class="num">Wrong</th><th class="num">Missed</th><th>Result</th><th>Checked</th><th></th></tr></thead>
+    <tbody>${list.map((c, i) => { const t = tally(c); return `<tr class="click" data-open="${c.id}"><td>${i + 1}</td><td>${esc(firstLine(c.note))}</td>
+      <td class="num">${t.suggested}</td><td class="num">${t.wrong || ""}</td><td class="num">${t.missed || ""}</td>
+      <td>${t.exact ? '<span class="pill good">All right</span>' : '<span class="pill bad">Corrected</span>'}</td><td class="muted">${fmtDate(c.updated || c.created)}</td>
+      <td><button class="btn sm ghost" type="button" data-del="${c.id}">Remove</button></td></tr>`; }).join("")}</tbody>`
+    : '<tbody><tr><td class="empty">Nothing here yet. Check a note on the <b>Test a note</b> tab and add it to your list.</td></tr></tbody>';
+}
+$("#cases").onclick = async (e) => {
+  const del = e.target.closest("[data-del]");
+  if (del) {
+    e.stopPropagation();
+    if (await confirmBox("Remove this note from your list?", "Its checks are removed from the report.", "Remove", true)) { await db.del(del.dataset.del); renderList(); }
+    return;
+  }
+  const row = e.target.closest("[data-open]");
+  if (!row) return;
+  const c = (await db.all()).find((x) => x.id === row.dataset.open);
+  if (!c) return;
+  cur = structuredClone(c);
+  $("#note").value = c.note;
+  showTab("test"); renderResult();
+  $("#result").scrollIntoView({ behavior: "smooth", block: "start" });
+};
+$("#clear-list").onclick = async () => {
+  if (!(await confirmBox("Clear your whole test list?", "Download your report first. This can't be undone.", "Clear list", true))) return;
+  await db.clear(); renderList();
+};
+
+// ---------------------------------------------------------------- the report
+
+function reportData(list) {
+  const s = totals(list);
+  return {
+    report: "ICD-10 coder manual test", app: APP, tester: settings.name || "", created: new Date().toISOString(),
+    metrics: { notes: s.notes, codes_suggested: s.suggested, correct: s.correct, wrong: s.wrong, missed: s.missed,
+               precision: s.precision, recall: s.recall, f1: s.f1, notes_fully_right: s.exact, notes_fully_right_rate: s.exactRate,
+               wrong_codes_flagged_for_review: s.flaggedWrong, review_flag_catch_rate: s.flagCatch, codes_flagged_for_review: s.flagged,
+               replacements_in_same_category: s.sameCategory, median_seconds: s.medianMs && s.medianMs / 1000, average_seconds: s.avgMs && s.avgMs / 1000 },
+    cases: list.map((c, i) => ({
+      case: i + 1, id: c.id, checked: new Date(c.updated || c.created).toISOString(), model: c.model, options: c.options, seconds: c.ms / 1000,
+      note: c.note, comment: c.comment || "",
+      coder_codes: (c.result.codes || []).map((x) => ({
+        code: x.code, description: x.description, condition: x.condition, reason: x.reason, confidence: x.confidence,
+        needs_review: !!x.needs_review, review_reasons: x.review_reasons || [], written: x.written || [], evidence: x.evidence || [],
+        verdict: c.reviews[x.code]?.verdict || "correct", replace_with: c.reviews[x.code]?.with || null, tester_reason: c.reviews[x.code]?.reason || null })),
+      missed: c.missed, not_coded: c.result.not_coded || [], code_set: c.result.code_set,
+    })),
+  };
+}
+function mdCell(s) { return String(s ?? "").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " "); }
+function reportMarkdown(list) {
+  const s = totals(list), d = reportData(list);
+  const out = [];
+  out.push(`# ICD-10 coder test report`, "",
+    `- **Tester:** ${settings.name || "(not set)"}`, `- **Exported:** ${fmtDate(Date.now())}`, `- **Notes checked:** ${s.notes}`,
+    `- **Test bench:** version ${APP.version}, build ${APP.build}`, "");
+  out.push(`## Results`, "", `| Measure | Result | In plain words |`, `|---|---|---|`,
+    `| Accuracy (precision) | ${pct(s.precision)} | ${s.correct} of ${s.correct + s.wrong} suggested codes were right |`,
+    `| Completeness (recall) | ${pct(s.recall)} | the coder found ${s.correct} of the ${s.correct + s.missed} codes the notes needed |`,
+    `| Overall score (F1) | ${pct(s.f1)} | accuracy and completeness combined |`,
+    `| Notes fully right | ${pct(s.exactRate)} | ${s.exact} of ${s.notes} notes needed no change |`,
+    `| Wrong codes flagged for review | ${pct(s.flagCatch)} | ${s.flaggedWrong} of ${s.wrong} wrong codes had a review flag |`,
+    `| Replacements in the same category | ${s.sameCategory} | wrong code and right code share the first 3 characters (near misses) |`,
+    `| Time per note | ${fmtSec(s.medianMs)} median | average ${fmtSec(s.avgMs)} |`, "");
+  const wrong = [], missed = [];
+  d.cases.forEach((c) => {
+    c.coder_codes.filter((x) => x.verdict !== "correct").forEach((x) => wrong.push({ ...x, case: c.case }));
+    c.missed.forEach((m) => missed.push({ ...m, case: c.case }));
+  });
+  out.push(`## Codes the coder got wrong (${wrong.length})`, "");
+  if (wrong.length) {
+    out.push(`| Note | Coder's code | Should be | Tester's reason | Coder's reason |`, `|---|---|---|---|---|`);
+    wrong.forEach((x) => out.push(`| ${x.case} | ${x.code} ${mdCell(x.description)} | ${x.replace_with ? x.replace_with + " " + mdCell(CODES?.map.get(x.replace_with)?.t || "") : "(not coded)"} | ${mdCell(x.tester_reason)} | ${mdCell(x.reason)} |`));
+  } else out.push("None.");
+  out.push("", `## Codes the coder missed (${missed.length})`, "");
+  if (missed.length) {
+    out.push(`| Note | Code | Description | Tester's reason |`, `|---|---|---|---|`);
+    missed.forEach((m) => out.push(`| ${m.case} | ${m.code} | ${mdCell(m.title)} | ${mdCell(m.reason)} |`));
+  } else out.push("None.");
+  out.push("", `## Notes`, "");
+  d.cases.forEach((c) => {
+    const t = tally(list[c.case - 1]);
+    out.push(`### Note ${c.case}: ${t.exact ? "all right" : `${t.wrong} wrong, ${t.missed} missed`}`, "",
+      `Checked ${fmtDate(c.checked)} · ${c.options.setting === "inpatient" ? "hospital stay" : "office visit"} · ${c.options.scope === "all" ? "everything documented" : "this visit"} · ${fmtSec(c.seconds * 1000)}`, "");
+    if (c.comment) out.push(`**Tester's comment:** ${c.comment}`, "");
+    out.push(`| # | Code | Description | Tester |`, `|---|---|---|---|`);
+    c.coder_codes.forEach((x, i) => out.push(`| ${i + 1} | ${x.code} | ${mdCell(x.description)} | ${x.verdict === "correct" ? "✓ correct" : x.verdict === "wrong" ? "✗ wrong: " + mdCell(x.tester_reason) : "↺ should be " + x.replace_with + ": " + mdCell(x.tester_reason)} |`));
+    c.missed.forEach((m) => out.push(`| + | ${m.code} | ${mdCell(m.title)} | missed: ${mdCell(m.reason)} |`));
+    out.push("", "<details><summary>Note text</summary>", "", "```", c.note.replace(/```/g, "ˋˋˋ"), "```", "</details>", "");
+  });
+  out.push(`## Data (for fine-tuning)`, "", "The full results as JSON, for Claude to read.", "", "```json", JSON.stringify(d, null, 1), "```", "");
+  return out.join("\n");
+}
+function download(name, text, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const fileStem = () => `icd10-coder-test-${(settings.name || "report").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${new Date().toISOString().slice(0, 10)}`;
+$("#export-md").onclick = async () => {
+  const list = (await db.all()).sort((a, b) => a.created - b.created);
+  if (!list.length) { toast("Your test list is empty.", "err"); return; }
+  await loadCodes().catch(() => {});
+  download(fileStem() + ".md", reportMarkdown(list), "text/markdown");
+  toast("Report downloaded. Attach it to an email to Triman.");
+};
+$("#export-json").onclick = async () => {
+  const list = (await db.all()).sort((a, b) => a.created - b.created);
+  if (!list.length) { toast("Your test list is empty.", "err"); return; }
+  download(fileStem() + ".json", JSON.stringify(reportData(list), null, 1), "application/json");
+};
+$("#copy-summary").onclick = async () => {
+  const s = totals(await db.all());
+  const text = `ICD-10 coder test: ${s.notes} notes checked by ${settings.name || "me"}.\n`
+    + `Accuracy ${pct(s.precision)} (${s.correct} right, ${s.wrong} wrong), completeness ${pct(s.recall)} (${s.missed} missed), `
+    + `overall score ${pct(s.f1)}, notes fully right ${pct(s.exactRate)}. The full report is attached.`;
+  try { await navigator.clipboard.writeText(text); toast("Summary copied: paste it into your email."); } catch { toast("Couldn't copy. Select the numbers and copy them by hand.", "err"); }
+};
+
+// ---------------------------------------------------------------- start
+
+renderConn();
+refreshCount();
+if (cur) { $("#note").value = cur.note; renderResult(); }
+showTab(location.hash.slice(1) === "list" ? "list" : "test");
+document.querySelectorAll("[data-od-version]").forEach((e) => { e.textContent = APP.version; });
+document.querySelectorAll("[data-od-build]").forEach((e) => { e.textContent = APP.build; });
+</script>
+<script>
+// About Orion: the "Powered by Orion" button opens the About panel (ORION-DESIGN.md §2a).
+// The mark draws itself each time the panel opens; click outside the panel or Close to shut it.
+(() => {
+  const dlg = document.getElementById('orion-dlg');
+  if (!dlg) return;
+  dlg.querySelectorAll('[data-od-year]').forEach((e) => { e.textContent = new Date().getFullYear(); });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-orion-about]')) {
+      const mark = dlg.querySelector('[data-mark]');
+      mark.innerHTML = mark.innerHTML;  // restarts the drawing
+      dlg.showModal();
+    } else if (e.target === dlg || e.target.closest('#orion-dlg [data-close], #orion-dlg a[href^="#"]')) {  // links within the page close it too
+      dlg.close();
+    }
+  });
+})();
+
+</script>
+</body>
+</html>

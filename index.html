@@ -445,8 +445,11 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.0.0", build: "67691f927b3a" };
+const APP = { version: "1.0.0", build: "82ba517880d6" };
 const MODEL = "icd10-cm-coder";
+const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
+// gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
+const OFF_CODES = ["model_not_found", "service_unavailable", "model_unavailable", "backend_unavailable"];
 // on the gateway PC (served by the coder at /ui/test-bench/) notes go through the local gateway, so usage is still counted
 const LOCAL = ["127.0.0.1", "localhost"].includes(location.hostname);
 const DEFAULT_API = LOCAL ? "http://127.0.0.1:8080/v1" : "https://x8.tailf4b79c.ts.net/v1";
@@ -544,7 +547,7 @@ $("#s-test").onclick = async () => {
     if (r.status === 403) throw new Error("this key is paused; ask Triman");
     if (!r.ok) throw new Error("the server answered " + r.status);
     const ids = ((await r.json()).data || []).map((m) => m.id);
-    $("#s-result").textContent = ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but the coder isn't switched on for this key.";
+    $("#s-result").textContent = ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but " + OFFLINE.charAt(0).toLowerCase() + OFFLINE.slice(1);
   } catch (err) {
     $("#s-result").textContent = "Couldn't connect: " + (err.message === "Failed to fetch" ? "the server can't be reached right now" : err.message) + ".";
   }
@@ -675,7 +678,8 @@ async function fetchCodes() {
     });
     const body = await r.json().catch(() => ({}));
     if (!r.ok) {
-      const msg = body?.error?.message || "";
+      const msg = body?.error?.message || "", code = body?.error?.code || "";
+      if (OFF_CODES.includes(code)) throw new Error(/starting/i.test(msg) ? "The ICD-10 Coder service is starting up. Please try again in a minute or two." : OFFLINE);
       if (r.status === 401) throw new Error("Your tester key wasn't accepted. Check it in Settings.");
       if (r.status === 403) throw new Error("Your tester key is paused. Ask Triman to switch it back on.");
       if (r.status === 423) throw new Error("Testing is switched off right now. " + msg);

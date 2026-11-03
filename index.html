@@ -445,10 +445,13 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.0.0", build: "82ba517880d6" };
+const APP = { version: "1.0.0", build: "5d5fae87a62f" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
+const UNREACHABLE = "The ICD-10 Coder server isn't responding, so it's probably switched off. Please ask Triman to start it, then try again.";
+// fetch() fails with a TypeError when nothing answers (Chrome: "Failed to fetch", Firefox: "NetworkError…", Safari: "Load failed")
+const unreachable = (err) => err instanceof TypeError && /fetch|network|load failed/i.test(err.message);
 const OFF_CODES = ["model_not_found", "service_unavailable", "model_unavailable", "backend_unavailable"];
 // on the gateway PC (served by the coder at /ui/test-bench/) notes go through the local gateway, so usage is still counted
 const LOCAL = ["127.0.0.1", "localhost"].includes(location.hostname);
@@ -549,7 +552,7 @@ $("#s-test").onclick = async () => {
     const ids = ((await r.json()).data || []).map((m) => m.id);
     $("#s-result").textContent = ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but " + OFFLINE.charAt(0).toLowerCase() + OFFLINE.slice(1);
   } catch (err) {
-    $("#s-result").textContent = "Couldn't connect: " + (err.message === "Failed to fetch" ? "the server can't be reached right now" : err.message) + ".";
+    $("#s-result").textContent = unreachable(err) ? UNREACHABLE : "Couldn't connect: " + err.message + ".";
   }
 };
 
@@ -698,7 +701,7 @@ async function fetchCodes() {
   } catch (err) {
     const text = err?.name === "AbortError" || err === "timeout"
       ? (controller.signal.reason === "timeout" ? "No answer after 15 minutes. Try again later." : "Cancelled.")
-      : err.message === "Failed to fetch" ? "The coding server can't be reached right now. Check your internet connection and try again in a minute."
+      : unreachable(err) ? UNREACHABLE
       : err instanceof SyntaxError ? "The server's answer couldn't be read. Try again; if it keeps happening, tell Triman."
       : err.message;
     $("#fetch-error").textContent = text; $("#fetch-error").hidden = false;

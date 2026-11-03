@@ -337,7 +337,7 @@
           </span></span>
         <span class="opt">Codes for
           <span class="seg" role="group" aria-label="Scope" id="opt-scope">
-            <button type="button" data-v="auto" aria-pressed="true">This visit</button><button type="button" data-v="all" aria-pressed="false">Everything documented</button>
+            <button type="button" data-v="auto" aria-pressed="false">This visit</button><button type="button" data-v="all" aria-pressed="true">Everything documented</button>
           </span></span>
         <span class="spacer"></span>
         <button class="btn primary lg" id="fetch" type="button">Fetch codes</button>
@@ -445,7 +445,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.0.0", build: "5d5fae87a62f" };
+const APP = { version: "1.0.0", build: "b1469dc58870" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served

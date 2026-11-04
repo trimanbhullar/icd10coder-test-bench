@@ -174,12 +174,12 @@
   .codebox { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .codebox input { font-family: var(--mono); }
   .code-check { font-size: 12.5px; min-height: 18px; color: var(--text-2); }
-  .code-check.ok { color: var(--good); } .code-check.warn { color: var(--warning); } .code-check.bad { color: var(--critical); }
   .suggest { position: absolute; top: 40px; left: 0; right: 0; z-index: 8; list-style: none; margin: 0; padding: 4px; background: var(--surface);
     border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: var(--shadow-pop); max-height: 300px; overflow: auto; min-width: 280px; }
   .suggest li { display: grid; grid-template-columns: 76px 1fr; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
   .suggest li b { font: 600 12.5px var(--mono); }
   .suggest li.nb { opacity: .6; }
+  .nc-acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
   .suggest li:hover, .suggest li.sel { background: var(--accent-wash); }
   .add-missed { display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto; gap: 8px; align-items: start; }
   .item-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
@@ -445,7 +445,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.0.0", build: "b1469dc58870" };
+const APP = { version: "1.0.0", build: "99a7b928ef12" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -575,7 +575,7 @@ async function loadCodes() {
   if (CODES) return CODES;
   const text = await (await fetch("codes.tsv")).text();
   const map = new Map(), list = [];
-  for (const line of text.split("\n")) {
+  for (const line of text.split(/\r?\n/)) {
     const [c, t, b] = line.split("\t");
     if (!c) continue;
     const e = { c, t, b: b === "1", k: c.replace(".", ""), low: t.toLowerCase() };
@@ -584,7 +584,9 @@ async function loadCodes() {
   return (CODES = { map, list });
 }
 function normCode(s) {
-  let c = String(s || "").toUpperCase().replace(/[^A-Z0-9.]/g, "");
+  s = String(s || "").trim();
+  if (!/^[A-Za-z]\d[A-Za-z0-9.]*$/.test(s)) return s;  // not code-shaped: keep what the tester typed
+  let c = s.toUpperCase();
   if (!c.includes(".") && c.length > 3) c = c.slice(0, 3) + "." + c.slice(3);
   return c;
 }
@@ -604,25 +606,19 @@ function searchCodes(q) {
   }
   return out.sort((a, b) => a.t.length - b.t.length).slice(0, 10);
 }
-/** Explains a typed code: its title, or why it can't be used. */
+/** Names a typed code when it's in the list. Testers can enter anything, so nothing here is an error. */
 function checkCode(raw) {
-  const c = normCode(raw);
-  if (!c) return { code: "", cls: "", text: "" };
-  if (!CODES) return { code: c, cls: "", text: "Checking…" };
-  const e = CODES.map.get(c);
-  if (!e) return { code: c, cls: "bad", text: `${c} isn't an ICD-10-CM code.` };
-  if (!e.b) return { code: c, cls: "warn", text: `${c} ${e.t}: not billable (it needs more characters).`, title: e.t };
-  return { code: c, cls: "ok", text: `${c} · ${e.t}`, title: e.t, ok: true };
+  const c = normCode(raw), e = CODES?.map.get(c);
+  return { code: c, text: e ? `${c} · ${e.t}` : "", title: e?.t || "" };
 }
-/** Wires a code input: suggestions while typing, and a check line under it. */
+/** Wires a code input: suggestions while typing, and the code's name under it. */
 function codeInput(input, check, onPick) {
   const box = input.closest(".codebox");
   let list = null, sel = -1, items = [];
   const close = () => { list?.remove(); list = null; sel = -1; };
   const update = () => {
     const r = checkCode(input.value);
-    check.className = "code-check " + r.cls;
-    check.textContent = input.value.trim() ? r.text : "";
+    check.textContent = r.text;
     onPick?.(r);
   };
   const pick = (e) => { input.value = e.c; close(); update(); };
@@ -637,7 +633,7 @@ function codeInput(input, check, onPick) {
   };
   input.addEventListener("focus", () => loadCodes().then(update));
   input.addEventListener("input", show);
-  input.addEventListener("blur", () => setTimeout(() => { close(); if (/^[A-Za-z]\d/.test(input.value.trim())) { input.value = normCode(input.value); update(); } }, 120));
+  input.addEventListener("blur", () => setTimeout(() => { close(); input.value = normCode(input.value); update(); }, 120));
   input.addEventListener("keydown", (ev) => {
     if (!list) return;
     if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
@@ -830,7 +826,7 @@ function renderResult() {
         <summary>Not coded, and why <span class="count">${nc.length}</span></summary>
         <div style="margin-top:8px">${nc.map((n, i) => `<div class="nc"><div><b>${esc(n.condition)}</b> <span class="pill">${esc(n.status || "")}</span>
           ${n.evidence ? `<span class="quote">${esc(n.evidence)}</span>` : ""}</div>
-          <div><button class="btn sm" type="button" data-should="${i}">Should be coded</button></div>
+          <div class="nc-acts"><button class="btn sm" type="button" data-should="${i}">Should be coded</button>${n.evidence ? `<button class="btn sm" type="button" data-other="${i}">Different code</button>` : ""}</div>
           <div class="why">${esc(n.why)}</div></div>`).join("") || '<div class="sub">Nothing was left out.</div>'}</div>
       </details>
       <details class="fold">
@@ -853,7 +849,7 @@ function renderResult() {
   $$(".cc", box).forEach((card) => {
     const code = card.dataset.code;
     const fixCode = $(".fix-code", card), check = $(".code-check", card);
-    const update = codeInput(fixCode, check, (r) => { const rv = cur.reviews[code]; if (rv && rv.verdict === "replace") { rv.with = r.ok || r.title ? r.code : ""; changed(); } });
+    const update = codeInput(fixCode, check, (r) => { const rv = cur.reviews[code]; if (rv && rv.verdict === "replace") { rv.with = r.code; changed(); } });
     if (fixCode.value) loadCodes().then(update);
     $(".fix-reason", card).addEventListener("input", (e) => { if (cur.reviews[code]) { cur.reviews[code].reason = e.target.value; changed(); } });
   });
@@ -873,6 +869,16 @@ function renderResult() {
       changed();
       return;
     }
+    const ot = e.target.closest("[data-other]");
+    if (ot) {
+      const n = cur.result.not_coded[+ot.dataset.other];
+      $("#m-reason").value = `The coder read "${n.evidence}" as ${n.condition}, but the diagnosis is: `;
+      $("#m-code").value = "";
+      $("#m-check").textContent = "";
+      $("#m-code").scrollIntoView({ behavior: "smooth", block: "center" });
+      $("#m-code").focus();
+      return;
+    }
     const sh = e.target.closest("[data-should]");
     if (sh) {
       const n = cur.result.not_coded[+sh.dataset.should];
@@ -890,13 +896,13 @@ function renderResult() {
   let missedPick = {};
   codeInput($("#m-code"), $("#m-check"), (r) => { missedPick = r; });
   $("#m-add").onclick = async () => {
-    await loadCodes();
+    await loadCodes().catch(() => {});  // the list only supplies the code's name
     const r = checkCode($("#m-code").value), reason = $("#m-reason").value.trim();
-    if (!r.title) { toast(r.code ? `${r.code} isn't an ICD-10-CM code.` : "Type the missed code first.", "err"); $("#m-code").focus(); return; }
+    if (!r.code) { toast("Type the missed code first.", "err"); $("#m-code").focus(); return; }
     if (!reason) { toast("Add the reason: what in the note supports this code.", "err"); $("#m-reason").focus(); return; }
     if ((cur.result.codes || []).some((x) => x.code === r.code)) { toast(`${r.code} is already in the coder's list above.`, "err"); return; }
     if (cur.missed.some((m) => m.code === r.code)) { toast(`${r.code} is already in your missed list.`, "err"); return; }
-    cur.missed.push({ code: r.code, title: r.title, billable: r.ok === true, reason });
+    cur.missed.push({ code: r.code, title: r.title, reason });
     $("#m-code").value = ""; $("#m-reason").value = ""; $("#m-check").textContent = "";
     renderMissed(); changed();
   };
@@ -906,7 +912,7 @@ function renderResult() {
   changed(false);
 }
 function renderMissed() {
-  $("#missed").innerHTML = cur.missed.map((m, i) => `<li><b class="mono">${esc(m.code)}</b><span class="grow"><b>${esc(m.title)}</b>${m.billable ? "" : ' <span class="pill warn">not billable</span>'}<br>
+  $("#missed").innerHTML = cur.missed.map((m, i) => `<li><b class="mono">${esc(m.code)}</b><span class="grow"><b>${esc(m.title)}</b><br>
     <span class="sub">${esc(m.reason)}</span></span><button class="btn sm ghost" type="button" data-unmiss="${i}" aria-label="Remove ${esc(m.code)}">Remove</button></li>`).join("");
   $("#missed").onclick = (e) => { const b = e.target.closest("[data-unmiss]"); if (b) { cur.missed.splice(+b.dataset.unmiss, 1); renderMissed(); changed(); } };
 }

@@ -271,6 +271,17 @@
   .step { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 16px; font-weight: 700; margin-right: 10px; vertical-align: 2px; }
   .steps { margin: 10px 0 16px; padding-left: 24px; max-width: 720px; } .steps li { margin: 4px 0; }
   .added { margin: 10px 0 0 44px; }
+  .options { display: grid; gap: 22px; margin-top: 16px; }
+  .opt-q { font-weight: 600; margin-bottom: 8px; }
+  .seg.choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0; background: none; border: 0; }
+  .seg.choices button { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left; padding: 14px 16px; border-radius: 12px; }
+  .seg.choices button b { font-size: 17px; }
+  .seg.choices button b::before { content: "\25CB\00A0"; }
+  .seg.choices button[aria-pressed="true"] b::before { content: "\2713\00A0"; }
+  .seg.choices button span { font-size: 15.5px; font-weight: 400; line-height: 1.45; color: inherit; }
+  .seg.choices button:disabled { opacity: .55; cursor: not-allowed; }
+  .opt-go { display: flex; justify-content: flex-end; }
+  @media (max-width: 720px) { .seg.choices { grid-template-columns: 1fr; } .opt-go .btn { width: 100%; } }
   .seg button { color: var(--text); border: 1px solid var(--border-strong); background: var(--surface); }
   .seg button:hover { background: var(--surface-2); }
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: transparent; box-shadow: none; }
@@ -401,18 +412,26 @@
       <div class="pdf-q" id="pdf-q" hidden></div>
       <textarea id="note" spellcheck="false" placeholder="Or paste the note's text here…" aria-label="Doctor's note"></textarea>
       <div class="options">
-        <span class="opt">Type of visit
-          <span class="seg" role="group" aria-label="Setting" id="opt-setting">
-            <button type="button" data-v="outpatient" aria-pressed="true">Office visit</button><button type="button" data-v="inpatient" aria-pressed="false">Hospital stay</button>
-          </span></span>
-        <span class="opt">Which codes
-          <span class="seg" role="group" aria-label="Scope" id="opt-scope">
-            <button type="button" data-v="auto" aria-pressed="false">Only this visit</button><button type="button" data-v="all" aria-pressed="true">Everything in the note</button>
-          </span></span>
-        <span class="spacer"></span>
-        <button class="btn primary lg" id="fetch" type="button">Get codes</button>
+        <div class="opt-group">
+          <div class="opt-q">What kind of note is this?</div>
+          <span class="seg choices" role="group" aria-label="What kind of note is this?" id="opt-setting">
+            <button type="button" data-v="outpatient" aria-pressed="true"><b>Office visit</b><span>A clinic or doctor's office note. Diagnoses written as "possible", "probable" or "rule out" aren't coded. Their symptoms are coded instead.</span></button>
+            <button type="button" data-v="inpatient" aria-pressed="false"><b>Hospital stay</b><span>A hospital admission or discharge note. Diagnoses still "possible" or "probable" at discharge are coded as if confirmed.</span></button>
+          </span>
+          <p class="hint" style="margin:8px 0 0"><b>Why the difference?</b> The official ICD-10-CM coding rules treat them differently. At an office visit, a diagnosis may still be a guess, so it shouldn't go on the patient's record as fact. By discharge, the hospital has usually tested and treated for it.</p>
+        </div>
+        <div class="opt-group">
+          <div class="opt-q">Which conditions should get codes?</div>
+          <span class="seg choices" role="group" aria-label="Which conditions should get codes?" id="opt-scope">
+            <button type="button" data-v="auto" aria-pressed="false"><b>Only this visit</b><span id="scope-visit-text"></span></button>
+            <button type="button" data-v="all" aria-pressed="true"><b>Everything in the note</b><span>Every condition the note documents, including past history and ongoing conditions listed elsewhere. Findings seen only in the review of systems, exam or test results still aren't coded.</span></button>
+          </span>
+          <p class="hint" style="margin:8px 0 0"><b>Why the difference?</b> A note often lists old conditions the doctor didn't deal with that day. "Only this visit" gives the codes for what was treated at this visit. "Everything in the note" gives a full list of what the note documents.</p>
+          <p class="hint" style="margin:8px 0 0"><b>Example:</b> the visit is for a cough, and diabetes appears only in the past history. "Only this visit" codes the cough. "Everything in the note" also codes the diabetes.</p>
+          <p class="hint" style="margin:8px 0 0"><b>When you check the codes,</b> judge them by what you chose here. In this example, a diabetes code is wrong under "Only this visit" and right under "Everything in the note".</p>
+        </div>
+        <div class="opt-go"><button class="btn primary lg" id="fetch" type="button">Get codes</button></div>
       </div>
-      <p class="hint">Office visit: "possible" or "rule out" diagnoses aren't coded. Hospital stay: they're coded as if confirmed.</p>
       <div class="waiting" id="waiting" hidden style="margin-top:14px"><span class="spinner"></span>
         <span><b>Reading the note…</b> <span id="elapsed">0 s</span> so far. This usually takes under a minute, so please wait.</span>
         <button class="btn sm" id="cancel" type="button">Cancel</button></div>
@@ -518,7 +537,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.1.0", build: "5f35cc6e1cbe" };
+const APP = { version: "1.1.0", build: "7a054fdfcf0e" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -997,10 +1016,19 @@ function codeInput(input, check, onPick) {
 let cur = local.get("tb-draft", null);  // the note being reviewed (kept if the page reloads)
 let controller = null, timer = null;
 const option = (id) => $(`#${id} button[aria-pressed="true"]`).dataset.v;
+function syncScope() {
+  const hospital = option("opt-setting") === "inpatient", visit = $('#opt-scope [data-v="auto"]');
+  visit.disabled = hospital;
+  $("#scope-visit-text").textContent = hospital ? "Not available for a hospital stay, which always codes everything in the note."
+    : "Only what the doctor dealt with at this visit: the assessment, plan and visit diagnoses. If the note has none of these, everything is coded.";
+  if (hospital) $$("#opt-scope button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "all")));
+}
 $$(".options .seg").forEach((seg) => seg.addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
   $$("button", seg).forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  syncScope();
 }));
+syncScope();
 $("#clear-note").onclick = () => { $("#note").value = ""; pdfOpen = null; renderPdfs(); $("#note").focus(); };
 $("#cancel").onclick = () => controller?.abort();
 

@@ -423,8 +423,8 @@
         <div class="opt-group">
           <div class="opt-q">Which conditions should get codes?</div>
           <span class="seg choices" role="group" aria-label="Which conditions should get codes?" id="opt-scope">
-            <button type="button" data-v="auto" aria-pressed="false"><b>Only this visit</b><span id="scope-visit-text"></span></button>
-            <button type="button" data-v="all" aria-pressed="true"><b>Everything in the note</b><span>Every condition the note documents, including past history and ongoing conditions listed elsewhere. Findings seen only in the review of systems, exam or test results still aren't coded.</span></button>
+            <button type="button" data-v="auto" aria-pressed="true"><b>Only this visit</b><span id="scope-visit-text"></span></button>
+            <button type="button" data-v="all" aria-pressed="false"><b>Everything in the note</b><span>Every condition the note documents, including past history and ongoing conditions listed elsewhere. Findings seen only in the review of systems, exam or test results still aren't coded.</span></button>
           </span>
           <p class="hint" style="margin:8px 0 0"><b>Why the difference?</b> A note often lists old conditions the doctor didn't deal with that day. "Only this visit" gives the codes for what was treated at this visit. "Everything in the note" gives a full list of what the note documents.</p>
           <p class="hint" style="margin:8px 0 0"><b>Example:</b> the visit is for a cough, and diabetes appears only in the past history. "Only this visit" codes the cough. "Everything in the note" also codes the diabetes.</p>
@@ -537,7 +537,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.1.0", build: "7a054fdfcf0e" };
+const APP = { version: "1.1.0", build: "952c3f4abd27" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served

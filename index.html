@@ -281,6 +281,12 @@
   .seg.choices button span { font-size: 15.5px; font-weight: 400; line-height: 1.45; color: inherit; }
   .seg.choices button:disabled { opacity: .55; cursor: not-allowed; }
   .opt-go { display: flex; justify-content: flex-end; }
+  .options { gap: 14px; }
+  .opt-q { margin-bottom: 6px; }
+  .seg.choices button, .seg.choices button[aria-pressed] { padding: 9px 13px; gap: 1px; }
+  .seg.choices button b { font-size: 16px; }
+  .seg.choices button span { font-size: 12px; line-height: 1.35; }
+  .opt-note { margin: 3px 0 0; font-size: 10.5px; line-height: 1.35; color: var(--text-2); }
   @media (max-width: 720px) { .seg.choices { grid-template-columns: 1fr; } .opt-go .btn { width: 100%; } }
   .seg button { color: var(--text); border: 1px solid var(--border-strong); background: var(--surface); }
   .seg button:hover { background: var(--surface-2); }
@@ -295,6 +301,117 @@
     .cc-body, .cc-actions, .fix, .added { margin-left: 0; }
     .seg { display: flex; } .seg button { flex: 1 1 100%; }
   }
+
+  /* visual pass: colour guides the eye to the step in hand; everything else stays quiet. Motion is short and runs once,
+     except the scan graphic, which only moves while a note is being read. */
+  body { background: radial-gradient(900px 380px at 10% -90px, color-mix(in srgb, var(--rigel) 8%, transparent), transparent 70%) no-repeat,
+    radial-gradient(800px 360px at 92% -110px, color-mix(in srgb, var(--betelgeuse) 7%, transparent), transparent 70%) no-repeat, var(--page); }
+  .topbar { border-bottom: 0; }
+  .topbar::after { content: ""; display: block; height: 1px; opacity: .55; background: linear-gradient(90deg, var(--border), var(--rigel) 35%, var(--betelgeuse) 65%, var(--border)); }
+  nav.tabs button[aria-selected="true"] { border-bottom-color: transparent; background: linear-gradient(90deg, var(--rigel), var(--betelgeuse)) bottom / 100% 2px no-repeat; }
+  nav.tabs button[aria-selected="true"] .count { background: var(--surface-3); color: var(--text); }
+
+  /* the guide in the header */
+  .navrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 20px; }
+  .journey { list-style: none; display: flex; align-items: center; gap: 0; margin: 0; padding: 0; }
+  .journey li { display: flex; align-items: center; }
+  .journey li + li::before { content: ""; width: 22px; height: 2px; margin: 0 2px; border-radius: 2px; background: var(--surface-3); transition: background-color .25s; }
+  .journey li.done + li::before, .journey li.done + li.current::before { background: linear-gradient(90deg, var(--good), color-mix(in srgb, var(--good) 45%, var(--rigel))); }
+  .journey button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: none; color: var(--text-2); font: 500 14.5px var(--body); padding: 6px 7px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  .journey button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+  .journey button:disabled { cursor: default; opacity: .6; }
+  .journey i { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font: 600 13px var(--body); background: var(--surface-3); color: var(--text-2); transition: background-color .2s, color .2s; }
+  .journey .done i { background: color-mix(in srgb, var(--good) 18%, var(--surface)); color: var(--good); }
+  .journey .current button { color: var(--text); font-weight: 600; }
+  .journey .current i { background: linear-gradient(135deg, var(--rigel), color-mix(in srgb, var(--rigel) 62%, var(--betelgeuse))); color: var(--on-accent); }
+
+  /* cards: only the step in hand is lit */
+  .card { border-radius: 16px; transition: border-color .25s, background-color .25s; scroll-margin-top: 130px; }
+  .card.current { border-color: color-mix(in srgb, var(--accent) 34%, var(--border)); background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, var(--surface)), var(--surface) 150px); }
+  .step { background: var(--surface-3); color: var(--text); transition: background-color .25s, color .25s; }
+  .card.current .step { background: linear-gradient(135deg, var(--rigel), color-mix(in srgb, var(--rigel) 62%, var(--betelgeuse))); color: var(--on-accent); }
+
+  /* buttons */
+  .btn { transition: background-color .15s, border-color .15s, transform .15s, box-shadow .15s; }
+  .btn.primary { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent)); box-shadow: 0 1px 2px rgba(0, 0, 0, .14), 0 6px 16px color-mix(in srgb, var(--accent) 20%, transparent); }
+  .btn.primary:hover:not(:disabled) { background: linear-gradient(180deg, var(--accent), var(--accent-hover)); transform: translateY(-1px); }
+  .btn.soft { color: var(--accent); background: var(--accent-wash); border-color: color-mix(in srgb, var(--accent) 40%, transparent); font-weight: 600; }
+  .btn.soft:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .btn.primary.ready { animation: ready 1.3s ease-out 3; }
+  @keyframes ready { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+
+  /* upload */
+  .dropzone { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 16px 18px; margin-bottom: 12px; border: 2px dashed var(--border-strong); border-radius: 14px; cursor: pointer; transition: border-color .2s, background-color .2s;
+    background: linear-gradient(120deg, var(--surface-2), color-mix(in srgb, var(--betelgeuse) 3%, var(--surface-2))); }
+  .dropzone:hover, .card.dropping .dropzone { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: var(--accent-wash); }
+  .card.dropping { outline: 0; }
+  .dz-icon { flex: none; width: 46px; height: 46px; color: var(--text-2); }
+  .dz-arrow { animation: nudge 1.1s ease-in-out .5s 3; }
+  @keyframes nudge { 50% { transform: translateY(-4px); } }
+  .dz-text { flex: 1 1 260px; min-width: 0; }
+  .dz-text b { display: block; font-size: 17px; }
+
+  /* choices */
+  .seg.choices button { border: 2px solid var(--border); background: var(--surface); color: var(--text); transition: border-color .2s, background-color .2s; }
+  .seg.choices button:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); }
+  .seg.choices button[aria-pressed="true"], .seg.choices button[aria-pressed="true"]:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 75%); }
+  .seg.choices button b { display: flex; align-items: center; gap: 9px; }
+  .seg.choices button b::before { content: ""; flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-strong); font-size: 12px; line-height: 1; }
+  .seg.choices button[aria-pressed="true"] b::before { content: "\2713"; border-color: transparent; color: var(--on-accent); background: linear-gradient(135deg, var(--rigel), color-mix(in srgb, var(--rigel) 62%, var(--betelgeuse))); animation: pick .22s ease-out; }
+  .seg.choices button span { color: var(--text-2); }
+  @keyframes pick { from { transform: scale(.6); } 60% { transform: scale(1.15); } }
+
+  /* reading the note: the only looping motion, and it stops when the note is read */
+  .waiting { padding: 14px 16px; border-radius: 14px; background: linear-gradient(120deg, var(--surface-2), color-mix(in srgb, var(--rigel) 5%, var(--surface-2))); color: var(--text); }
+  .scan { position: relative; flex: none; width: 36px; height: 46px; border-radius: 5px; overflow: hidden; border: 2px solid var(--border-strong); background: repeating-linear-gradient(180deg, transparent 0 6px, var(--border-strong) 6px 8px) 6px 6px / calc(100% - 12px) calc(100% - 12px) no-repeat var(--surface); }
+  .scan::after { content: ""; position: absolute; left: 0; right: 0; height: 16px; top: -16px; background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--rigel) 50%, transparent)); border-bottom: 2px solid var(--rigel); animation: scan 1.8s ease-in-out infinite alternate; }
+  @keyframes scan { to { top: 100%; } }
+
+  /* results */
+  .tile { position: relative; overflow: hidden; background: linear-gradient(140deg, var(--surface-2), color-mix(in srgb, var(--tone, var(--muted)) 7%, var(--surface-2))) !important; }
+  .tile .ti { position: absolute; top: 12px; right: 12px; width: 24px; height: 24px; color: var(--tone, var(--muted)); opacity: .85; }
+  .cc { position: relative; overflow: hidden; padding-left: 24px; transition: border-color .2s, background-color .2s, box-shadow .2s; }
+  .cc::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 5px; background: var(--surface-3); transition: background-color .2s; }
+  .cc[data-review]::before { background: linear-gradient(180deg, var(--warning), color-mix(in srgb, var(--warning) 45%, transparent)); }
+  .cc.v-correct::before { background: linear-gradient(180deg, var(--good), color-mix(in srgb, var(--good) 45%, transparent)); }
+  .cc.v-wrong::before, .cc.v-replace::before { background: linear-gradient(180deg, var(--critical), color-mix(in srgb, var(--critical) 45%, transparent)); }
+  .cc.v-wrong, .cc.v-replace { background: color-mix(in srgb, var(--crit-wash) 35%, var(--surface)); }
+  .quote { border-left-color: color-mix(in srgb, var(--text-2) 40%, transparent); background: var(--surface-2); }
+  .seg.verdict, .seg.nc-verdict { background: none; border: 0; padding: 0; gap: 8px; }
+  .seg.verdict button, .seg.nc-verdict button { border: 1px solid var(--border-strong); border-radius: 10px; }
+  .verdict button[data-v="correct"][aria-pressed="true"], .nc-verdict button[data-v="agree"][aria-pressed="true"] { background: var(--good-wash); color: color-mix(in srgb, var(--good) 72%, var(--text)); border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); font-weight: 600; animation: pick .22s ease-out; }
+  .verdict button[data-v="wrong"][aria-pressed="true"], .verdict button[data-v="replace"][aria-pressed="true"],
+  .nc-verdict button[data-v="should"][aria-pressed="true"], .nc-verdict button[data-v="other"][aria-pressed="true"] { background: var(--crit-wash); color: color-mix(in srgb, var(--critical) 72%, var(--text)); border-color: var(--critical); box-shadow: inset 0 0 0 1px var(--critical); font-weight: 600; animation: pick .22s ease-out; }
+  #result.enter > .card, #result.enter .tile, #result.enter .cc { animation: rise .35s ease-out both; }
+  #result.enter > .card:nth-child(2) { animation-delay: .08s; } #result.enter > .card:nth-child(3) { animation-delay: .14s; } #result.enter > .card:nth-child(4) { animation-delay: .2s; }
+  #result.enter .tile:nth-child(2) { animation-delay: .05s; } #result.enter .tile:nth-child(3) { animation-delay: .1s; } #result.enter .tile:nth-child(4) { animation-delay: .15s; }
+  #result.enter .cc:nth-child(2) { animation-delay: .06s; } #result.enter .cc:nth-child(3) { animation-delay: .12s; } #result.enter .cc:nth-child(4) { animation-delay: .18s; } #result.enter .cc:nth-child(n+5) { animation-delay: .22s; }
+
+  /* finishing: how much is checked */
+  .review-track { height: 4px; background: var(--surface-3); }
+  .review-track i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--rigel), var(--good)); transition: width .3s ease-out; }
+  .actionbar { border-top: 0; }
+
+  /* welcome */
+  .welcome-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 330px); gap: 8px 28px; align-items: center; }
+  .welcome-art { width: 100%; height: auto; color: var(--text-2); }
+  .welcome-art .draw { stroke-dasharray: 220; stroke-dashoffset: 220; animation: draw .9s ease-out .25s forwards; }
+  .welcome-art .chip { animation: rise .4s ease-out both; } .welcome-art .chip.c2 { animation-delay: .75s; } .welcome-art .chip.c1 { animation-delay: .55s; } .welcome-art .chip.c3 { animation-delay: .95s; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+
+  /* toasts confirm with a check that draws itself */
+  .toast { display: flex; align-items: center; gap: 10px; }
+  .toast svg { flex: none; width: 22px; height: 22px; color: var(--good); }
+  .toast svg path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw .35s ease-out .1s forwards; }
+
+  @media (max-width: 900px) {
+    .journey { width: 100%; padding-bottom: 8px; overflow-x: auto; scrollbar-width: none; }
+    .journey li:not(.current) span { display: none; }
+    .journey li + li::before { width: 14px; }
+  }
+  @media (max-width: 720px) { .welcome-grid { grid-template-columns: 1fr; } .welcome-art { max-width: 320px; } }
+  @media (prefers-reduced-motion: reduce) { .welcome-art .draw, .toast svg path { stroke-dashoffset: 0; } .scan::after { top: 40%; } }
   /* ---------- About Orion: the "Powered by Orion" footer button and the About panel it opens.
      Required in every Orion app (ORION-DESIGN.md §2a). The panel is always Night, whatever the app's mode. */
   footer.orion-foot { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; padding: 36px 0 8px; text-align: center; }
@@ -375,10 +492,13 @@
         <button class="btn sm" id="open-settings" type="button">Settings</button>
       </div>
     </header>
-    <nav class="tabs" role="tablist" aria-label="Sections">
+    <div class="navrow">
+      <nav class="tabs" role="tablist" aria-label="Sections">
       <button role="tab" data-tab="test" aria-selected="true">Check a note</button>
       <button role="tab" data-tab="list" aria-selected="false">My finished notes <span class="count" id="list-count">0</span></button>
     </nav>
+      <ol class="journey" id="journey" aria-label="Your progress on this note"></ol>
+    </div>
   </div>
 </div>
 
@@ -386,6 +506,7 @@
   <!-- ============================== TEST -->
   <section id="tab-test" role="tabpanel">
     <div class="card" id="welcome" hidden>
+      <div class="welcome-grid"><div>
       <h1>Welcome to the test bench</h1>
       <p style="max-width:720px;margin:6px 0 0">Here's how it works:</p>
       <ol class="steps">
@@ -396,18 +517,34 @@
       </ol>
       <p style="max-width:720px">To begin, enter your name and the <b>tester key</b> Triman gave you.</p>
       <button class="btn primary lg" type="button" data-open-settings>Enter my name and key</button>
+      </div>
+      <svg class="welcome-art" viewBox="0 0 320 130" fill="none" aria-hidden="true">
+        <rect x="6" y="10" width="86" height="110" rx="9" stroke="currentColor" stroke-width="2" fill="var(--surface-2)"/>
+        <path d="M22 34h54M22 50h54M22 66h40M22 82h54M22 98h30" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".45"/>
+        <path class="draw" d="M100 65c30 0 26-36 62-36M100 65h62M100 65c30 0 26 36 62 36" stroke="var(--rigel)" stroke-width="2" stroke-linecap="round"/>
+        <g class="chip c1"><rect x="166" y="14" width="88" height="30" rx="8" fill="var(--surface)" stroke="var(--border-strong)"/><text x="210" y="34" text-anchor="middle" font-family="var(--mono)" font-size="14" font-weight="600" fill="var(--text)">E11.65</text></g>
+        <g class="chip c2"><rect x="166" y="50" width="88" height="30" rx="8" fill="var(--surface)" stroke="var(--border-strong)"/><text x="210" y="70" text-anchor="middle" font-family="var(--mono)" font-size="14" font-weight="600" fill="var(--text)">I10</text></g>
+        <g class="chip c3"><rect x="166" y="86" width="88" height="30" rx="8" fill="var(--surface)" stroke="var(--border-strong)"/><text x="210" y="106" text-anchor="middle" font-family="var(--mono)" font-size="14" font-weight="600" fill="var(--text)">Z87.891</text></g>
+        <g class="chip c1"><circle cx="280" cy="29" r="12" fill="var(--good-wash)"/><path d="M274 29l4 4 8-8" stroke="var(--good)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <g class="chip c2"><circle cx="280" cy="65" r="12" fill="var(--good-wash)"/><path d="M274 65l4 4 8-8" stroke="var(--good)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+        <g class="chip c3"><circle cx="280" cy="101" r="12" fill="var(--crit-wash)"/><path d="M275 96l10 10M285 96l-10 10" stroke="var(--critical)" stroke-width="2.5" stroke-linecap="round"/></g>
+      </svg></div>
     </div>
 
-    <div class="card">
+    <div class="card" data-step="1">
       <div class="card-head">
         <h2><span class="step">1</span>Add the doctor's note</h2>
         <span class="sub">Upload PDF files, or paste the note's text into the box. Use de-identified notes only.</span>
         <span class="right"><button class="btn sm" id="clear-note" type="button">Empty the box</button></span>
       </div>
-      <div class="pdf-bar">
-        <label class="btn" for="pdf-input" tabindex="0" id="pdf-label">Upload PDF files</label>
+      <div class="dropzone" id="dropzone">
+        <svg class="dz-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 6h16l10 10v26H12z" fill="var(--surface)"/><path d="M28 6v10h10"/>
+          <g class="dz-arrow"><path d="M25 37V24M19.5 29.5L25 24l5.5 5.5" stroke="var(--rigel)"/></g>
+        </svg>
+        <span class="dz-text"><b>Drop PDF files here</b><span class="sub">Use one PDF for each note. Scanned PDFs need a Claude key, which you can add in Settings.</span></span>
+        <label class="btn" for="pdf-input" tabindex="0" id="pdf-label">Choose PDF files</label>
         <input type="file" id="pdf-input" accept=".pdf,application/pdf" multiple hidden>
-        <span class="sub">Use one PDF for each note. Scanned PDFs need a Claude key, which you can add in Settings.</span>
       </div>
       <div class="pdf-q" id="pdf-q" hidden></div>
       <textarea id="note" spellcheck="false" placeholder="Or paste the note's text here…" aria-label="Doctor's note"></textarea>
@@ -418,7 +555,7 @@
             <button type="button" data-v="outpatient" aria-pressed="true"><b>Office visit</b><span>A clinic or doctor's office note. Diagnoses written as "possible", "probable" or "rule out" aren't coded. Their symptoms are coded instead.</span></button>
             <button type="button" data-v="inpatient" aria-pressed="false"><b>Hospital stay</b><span>A hospital admission or discharge note. Diagnoses still "possible" or "probable" at discharge are coded as if confirmed.</span></button>
           </span>
-          <p class="hint" style="margin:8px 0 0"><b>Why the difference?</b> The official ICD-10-CM coding rules treat them differently. At an office visit, a diagnosis may still be a guess, so it shouldn't go on the patient's record as fact. By discharge, the hospital has usually tested and treated for it.</p>
+          <p class="opt-note"><b>Why the difference?</b> The official ICD-10-CM coding rules treat them differently. At an office visit, a diagnosis may still be a guess, so it shouldn't go on the patient's record as fact. By discharge, the hospital has usually tested and treated for it.</p>
         </div>
         <div class="opt-group">
           <div class="opt-q">Which conditions should get codes?</div>
@@ -426,13 +563,13 @@
             <button type="button" data-v="auto" aria-pressed="true"><b>Only this visit</b><span id="scope-visit-text"></span></button>
             <button type="button" data-v="all" aria-pressed="false"><b>Everything in the note</b><span>Every condition the note documents, including past history and ongoing conditions listed elsewhere. Findings seen only in the review of systems, exam or test results still aren't coded.</span></button>
           </span>
-          <p class="hint" style="margin:8px 0 0"><b>Why the difference?</b> A note often lists old conditions the doctor didn't deal with that day. "Only this visit" gives the codes for what was treated at this visit. "Everything in the note" gives a full list of what the note documents.</p>
-          <p class="hint" style="margin:8px 0 0"><b>Example:</b> the visit is for a cough, and diabetes appears only in the past history. "Only this visit" codes the cough. "Everything in the note" also codes the diabetes.</p>
-          <p class="hint" style="margin:8px 0 0"><b>When you check the codes,</b> judge them by what you chose here. In this example, a diabetes code is wrong under "Only this visit" and right under "Everything in the note".</p>
+          <p class="opt-note"><b>Why the difference?</b> A note often lists old conditions the doctor didn't deal with that day. "Only this visit" gives the codes for what was treated at this visit. "Everything in the note" gives a full list of what the note documents.</p>
+          <p class="opt-note"><b>Example:</b> the visit is for a cough, and diabetes appears only in the past history. "Only this visit" codes the cough. "Everything in the note" also codes the diabetes.</p>
+          <p class="opt-note"><b>When you check the codes,</b> judge them by what you chose here. In this example, a diabetes code is wrong under "Only this visit" and right under "Everything in the note".</p>
         </div>
         <div class="opt-go"><button class="btn primary lg" id="fetch" type="button">Get codes</button></div>
       </div>
-      <div class="waiting" id="waiting" hidden style="margin-top:14px"><span class="spinner"></span>
+      <div class="waiting" id="waiting" hidden style="margin-top:14px"><span class="scan" aria-hidden="true"></span>
         <span><b>Reading the note…</b> <span id="elapsed">0 s</span> so far. This usually takes under a minute, so please wait.</span>
         <button class="btn sm" id="cancel" type="button">Cancel</button></div>
       <div class="callout bad" id="fetch-error" hidden style="margin-top:14px"></div>
@@ -480,6 +617,7 @@
 </main>
 
 <div class="actionbar" id="actionbar" hidden>
+  <div class="review-track" aria-hidden="true"><i id="review-fill"></i></div>
   <div class="wrap">
     <span class="tally" id="tally"></span>
     <span class="spacer"></span>
@@ -537,7 +675,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.1.0", build: "952c3f4abd27" };
+const APP = { version: "1.1.0", build: "8c6f829aedb3" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -563,7 +701,9 @@ const local = {
 
 function toast(msg, kind = "") {
   const el = document.createElement("div");
-  el.className = "toast " + kind; el.textContent = msg;
+  el.className = "toast " + kind;
+  if (kind !== "err") el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l4.5 4.5L19 7.5"/></svg>';
+  el.append(msg);
   $("#toasts").append(el);
   setTimeout(() => el.remove(), kind === "err" ? 10000 : 6000);
 }
@@ -660,11 +800,40 @@ $("#s-test-claude").onclick = async () => {
 
 // ---------------------------------------------------------------- tabs
 
+const JOURNEY = ["Add note", "Check codes", "Not coded", "Missed codes", "Finish"];
+let journeyAt = 0;
+function renderJourney() {
+  let at = 1;
+  if (cur && !$("#tab-test").hidden) {
+    const line = $(".topbar").getBoundingClientRect().bottom + 140;
+    $$("[data-step]").forEach((c) => { if (c.getBoundingClientRect().top <= line) at = +c.dataset.step; });
+    if (innerHeight + scrollY >= document.documentElement.scrollHeight - 160) at = 5;
+  }
+  $$("[data-step]").forEach((c) => c.classList.toggle("current", +c.dataset.step === at));
+  if (at === journeyAt && $("#journey").dataset.has === String(!!cur)) return;
+  journeyAt = at; $("#journey").dataset.has = String(!!cur);
+  $("#journey").innerHTML = JOURNEY.map((t, i) => {
+    const n = i + 1, state = n < at ? "done" : n === at ? "current" : "";
+    return `<li class="${state}" ${n === at ? 'aria-current="step"' : ""}><button type="button" data-go="${n}" ${!cur && n > 1 ? "disabled" : ""}><i>${n < at ? "\u2713" : n}</i><span>${t}</span></button></li>`;
+  }).join("");
+}
+let journeyQueued = false;
+addEventListener("scroll", () => { if (journeyQueued || !cur) return; journeyQueued = true; requestAnimationFrame(() => { journeyQueued = false; renderJourney(); }); }, { passive: true });
+$("#journey").onclick = (e) => {
+  const b = e.target.closest("[data-go]");
+  if (!b) return;
+  const n = +b.dataset.go;
+  if (n === 5) { $("#add-case").focus({ preventScroll: true }); scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }); return; }
+  $(`[data-step="${n}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 function showTab(name) {
   $$("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === name)));
   $("#tab-test").hidden = name !== "test";
   $("#tab-list").hidden = name !== "list";
   $("#actionbar").hidden = name !== "test" || !cur;
+  $("#journey").hidden = name !== "test";
+  renderJourney();
   if (name === "list") renderList();
   if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
 }
@@ -880,8 +1049,8 @@ function renderPdfs() {
                  ready: `<span class="pill good">Ready</span>`, done: `<span class="pill">Finished</span>`, error: `<span class="pill warn">Can't read</span>` };
   box.innerHTML = `<div class="pdf-q-head"><b>Your PDF files</b><span class="sub">${done} of ${pdfs.length} finished</span>
       <span class="right">${next ? `<button class="btn sm" type="button" data-pdf-next>Go to the next note</button>` : ""}
-      ${scans.length && settings.claudeKey ? `<button class="btn sm primary" type="button" data-pdf-all>Read ${scans.length} scan${scans.length === 1 ? "" : "s"} with Claude</button>` : ""}
-      ${scans.length && !settings.claudeKey ? `<button class="btn sm primary" type="button" data-open-settings>Add a Claude key to read scans</button>` : ""}
+      ${scans.length && settings.claudeKey ? `<button class="btn sm soft" type="button" data-pdf-all>Read ${scans.length} scan${scans.length === 1 ? "" : "s"} with Claude</button>` : ""}
+      ${scans.length && !settings.claudeKey ? `<button class="btn sm soft" type="button" data-open-settings>Add a Claude key to read scans</button>` : ""}
       <button class="btn sm" type="button" data-pdf-clear>Remove all</button></span></div>
     ${scans.length ? `<div class="pdf-row"><span class="msg">Reading a scan sends the whole PDF to Anthropic using ${settings.claudeKey ? "your key, and it's billed to that key's account" : "a Claude key"}. Nothing is sent until you press the button.</span></div>` : ""}
     ${pdfs.map((x) => `<div class="pdf-row ${x.id === pdfOpen ? "open" : ""}">
@@ -898,6 +1067,7 @@ function renderPdfs() {
       ${x.msg ? `<span class="msg">${esc(x.msg)}</span>` : ""}</div>`).join("")}`;
 }
 
+$("#dropzone").onclick = (e) => { if (!e.target.closest("label, input")) $("#pdf-input").click(); };
 $("#pdf-input").onchange = (e) => { addPdfs(e.target.files); e.target.value = ""; };
 $("#pdf-label").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#pdf-input").click(); } };
 $("#pdf-q").onclick = (e) => {
@@ -1145,7 +1315,7 @@ function codeCard(x) {
     (x.evidence || []).length ? `<dt>From the note</dt><dd>${x.evidence.map((q) => `<span class="quote">${esc(q)}</span>`).join("")}</dd>` : "",
     (x.sections || []).length ? `<dt>Where in the note</dt><dd>${esc(x.sections.map(sectionName).join(", "))}</dd>` : "",
   ].join("");
-  return `<article class="cc ${v ? "v-" + v : ""}" data-code="${esc(x.code)}">
+  return `<article class="cc ${v ? "v-" + v : ""}" data-code="${esc(x.code)}" ${x.needs_review ? "data-review" : ""}>
     <div class="cc-head"><span class="seq">${x.sequence ?? ""}</span>
       <div class="cc-title"><div class="cc-code">${esc(x.code)}</div><div class="cc-desc">${esc(x.description)}</div><div class="cc-pills">${pills}</div></div></div>
     <dl class="cc-body">${rows}</dl>
@@ -1162,6 +1332,13 @@ function codeCard(x) {
     </div>
   </article>`;
 }
+const TILE_ICON = {
+  codes: '<path d="M6 3h9l4 4v14H6z"/><path d="M15 3v4h4M9 12h7M9 16h5"/>',
+  check: '<path d="M6 21V4M6 4h12l-3 4 3 4H6"/>',
+  left: '<circle cx="12" cy="12" r="8.5"/><path d="M6 18L18 6"/>',
+  time: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/>',
+};
+const tileIcon = (k) => `<svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${TILE_ICON[k]}</svg>`;
 const ncAsk = (n, v) => v === "other" ? `The coder read "${n.evidence}" as ${n.condition}, but the diagnosis is: `
   : `The coder left out "${n.condition}", but it should be coded because: `;
 function ncCard(n, i) {
@@ -1175,7 +1352,7 @@ function ncCard(n, i) {
     n.evidence ? `<dt>From the note</dt><dd><span class="quote">${esc(n.evidence)}</span></dd>` : "",
     (n.sections || []).length ? `<dt>Where in the note</dt><dd>${esc(n.sections.map(sectionName).join(", "))}</dd>` : "",
   ].join("");
-  return `<article class="cc ${v === "agree" ? "v-correct" : v ? "v-replace" : ""}" data-nc="${i}">
+  return `<article class="cc ${v === "agree" ? "v-correct" : v ? "v-replace" : ""}" data-nc="${i}" ${n.needs_review ? "data-review" : ""}>
     <div class="cc-head"><span class="seq">${i + 1}</span>
       <div class="cc-title"><div class="cc-name">${esc(n.condition)}</div><div class="cc-desc none">No code given</div>${pills ? `<div class="cc-pills">${pills}</div>` : ""}</div></div>
     <dl class="cc-body">${rows}</dl>
@@ -1214,32 +1391,36 @@ function sectionName(id) {
 }
 function renderResult() {
   const box = $("#result");
-  if (!cur) { box.hidden = true; $("#actionbar").hidden = true; return; }
+  if (!cur) { box.hidden = true; delete box.dataset.id; $("#actionbar").hidden = true; renderJourney(); return; }
+  const fresh = box.dataset.id !== cur.id;  // cards rise in once per note, not on every redraw
+  box.dataset.id = cur.id;
+  box.classList.toggle("enter", fresh);
+  if (fresh) setTimeout(() => box.classList.remove("enter"), 1000);
   const res = cur.result, codes = res.codes || [], nc = res.not_coded || [], edges = res.edge_cases || [], secs = res.sections || [];
   const flagged = codes.filter((x) => x.needs_review).length;
   box.hidden = false;
   box.innerHTML = `
-    <div class="card">
+    <div class="card" data-step="2">
       <div class="card-head"><h2><span class="step">2</span>Check each code</h2>
         <span class="sub">${cur.saved ? "This note is finished. If you change anything, press Save my changes." : "Is each code right? Any code you leave unmarked counts as correct."}</span>
         <span class="right"><span class="pill">${esc(res.code_set || "ICD-10-CM")}</span></span></div>
       <div class="tiles">
-        <div class="tile"><div class="l">Codes suggested</div><div class="v">${codes.length}</div><div class="n">in billing order</div></div>
-        <div class="tile"><div class="l">Please check</div><div class="v">${flagged}</div><div class="n">${flagged ? "the coder is unsure of these" : "nothing needs extra care"}</div></div>
-        <div class="tile"><div class="l">Looked at, not coded</div><div class="v">${nc.length}</div><div class="n">see step 3</div></div>
-        <div class="tile"><div class="l">Time taken</div><div class="v">${fmtSec(cur.ms)}</div><div class="n">${esc(cur.options.setting === "inpatient" ? "hospital stay" : "office visit")}, ${esc(cur.options.scope === "all" ? "everything in the note" : "only this visit")}</div></div>
+        <div class="tile" style="--tone:var(--rigel)">${tileIcon("codes")}<div class="l">Codes suggested</div><div class="v">${codes.length}</div><div class="n">in billing order</div></div>
+        <div class="tile" style="--tone:var(--warning)">${tileIcon("check")}<div class="l">Please check</div><div class="v">${flagged}</div><div class="n">${flagged ? "the coder is unsure of these" : "nothing needs extra care"}</div></div>
+        <div class="tile" style="--tone:var(--muted)">${tileIcon("left")}<div class="l">Looked at, not coded</div><div class="v">${nc.length}</div><div class="n">see step 3</div></div>
+        <div class="tile" style="--tone:var(--good)">${tileIcon("time")}<div class="l">Time taken</div><div class="v">${fmtSec(cur.ms)}</div><div class="n">${esc(cur.options.setting === "inpatient" ? "hospital stay" : "office visit")}, ${esc(cur.options.scope === "all" ? "everything in the note" : "only this visit")}</div></div>
       </div>
       <div class="codes">${codes.map(codeCard).join("") || '<div class="empty">The coder didn\'t suggest any codes for this note.</div>'}</div>
       ${codes.length ? '<div class="row" style="margin-top:14px"><button class="btn" type="button" id="all-correct">Mark all the rest as correct</button></div>' : ""}
     </div>
 
-    <div class="card">
+    <div class="card" data-step="3">
       <div class="card-head"><h2><span class="step">3</span>Check what it looked at but didn't code</h2>
         <span class="sub">The coder found these in the note and decided not to code them. These aren't codes. Was it right to leave each one out?</span></div>
       <div class="codes">${nc.map(ncCard).join("") || '<div class="empty">The coder didn\'t leave anything out.</div>'}</div>
     </div>
 
-    <div class="card">
+    <div class="card" data-step="4">
       <div class="card-head"><h2><span class="step">4</span>Add any codes it missed</h2><span class="sub">Only if the note needs a code that isn't listed above. If nothing is missing, skip this step.</span></div>
       <div class="add-missed">
         <div class="codebox"><input type="text" id="m-code" placeholder="Type the code, or words to search for it" aria-label="Missed code"><div class="code-check" id="m-check"></div></div>
@@ -1347,6 +1528,7 @@ function renderResult() {
   $("#comment").value = cur.comment || "";
   $("#comment").addEventListener("input", (e) => { if (cur) { cur.comment = e.target.value; local.set("tb-draft", cur); } });
   changed(false);
+  renderJourney();
 }
 function renderMissed() {
   $("#missed").innerHTML = cur.missed.map((m, i) => `<li><b class="mono">${esc(m.code)}</b><span class="grow"><b>${esc(m.title)}</b><br>
@@ -1365,6 +1547,10 @@ function changed(store = true) {
   $("#tally").innerHTML = `<b>Step 5.</b> ${t.suggested} codes: ${marked} marked, <span style="color:var(--critical)">${t.wrong} wrong</span>, <span style="color:var(--warning)">${t.missed} missed</span>`;
   $("#add-case").textContent = cur.saved ? "Save my changes" : "Finish this note";
   $("#actionbar").hidden = $("#tab-test").hidden;
+  const items = (cur.result.codes || []).length + (cur.result.not_coded || []).length;
+  const done = Object.keys(cur.reviews).length + Object.keys(cur.ncReviews || {}).length;
+  $("#review-fill").style.width = (items ? Math.min(100, done / items * 100) : 100) + "%";
+  $("#add-case").classList.toggle("ready", !cur.saved && items > 0 && done >= items);
 }
 $("#discard").onclick = async () => {
   if (!cur) return;

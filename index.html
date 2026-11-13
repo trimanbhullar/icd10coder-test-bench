@@ -438,6 +438,34 @@
   .cc.poss::before { background: repeating-linear-gradient(180deg, var(--warning) 0 6px, transparent 6px 12px); }
   .cc.poss.p-ask::before { background: var(--good); } .cc.poss.p-no { opacity: .62; }
   .cc.poss .seq { background: var(--warn-wash); color: var(--warning); }
+
+  /* everything at 80%: the page was too big to move around in */
+  html { zoom: .8; }
+  /* breathing room: nothing touches the element under it */
+  .dropzone { margin-bottom: 14px; }
+  .paste-row { margin: 10px 0 0; }
+  .pdf-q { margin: 16px 0 0; }
+  .pdf-q-head .right, .pdf-row .acts { gap: 8px; row-gap: 8px; }
+  .pdf-row { row-gap: 8px; padding: 10px 12px; }
+  .card-head { margin-bottom: 16px; }
+  .cc-pills { margin-top: 8px; row-gap: 6px; }
+  .cc-actions { margin-top: 16px; row-gap: 10px; }
+  .seg.verdict, .seg.poss-verdict { display: flex; flex-wrap: wrap; gap: 8px; background: none; border: 0; padding: 0; }
+  .seg.poss-verdict button { border: 1px solid var(--border-strong); border-radius: 10px; }
+  .fix { margin-top: 14px; gap: 10px; }
+  .quote { margin: 4px 0; } .quote-hint { display: block; margin-top: 4px; }
+  .codes { gap: 16px; }
+  .poss-note { margin-bottom: 16px; }
+  .add-missed { gap: 10px; } .item-list { margin-top: 14px; gap: 10px; }
+  .np-head { margin-bottom: 12px; }
+  .review, .review-main > .card { margin-bottom: 16px; } .review-main > .card:last-child { margin-bottom: 0; }
+  details.more h3 { margin: 20px 0 10px; } details.more p.sub { margin: 10px 0 0; }
+  .actionbar .wrap { row-gap: 10px; }
+  dialog.dlg .form { gap: 16px; } dialog.dlg .row { row-gap: 8px; }
+  #tab-list .card-head .right { gap: 10px; row-gap: 10px; } #tab-list .row { row-gap: 10px; }
+  /* at 80% a narrower window still has room for the note beside its codes */
+  @media (min-width: 801px) and (max-width: 1000px) { .review { grid-template-columns: minmax(0, 420px) minmax(0, 1fr); } .note-pane { position: sticky; } .note-view { max-height: calc(125vh - 300px); } }
+  .note-view { max-height: calc(125vh - 300px); }
   /* ---------- About Orion: the "Powered by Orion" footer button and the About panel it opens.
      Required in every Orion app (ORION-DESIGN.md §2a). The panel is always Night, whatever the app's mode. */
   footer.orion-foot { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; padding: 36px 0 8px; text-align: center; }
@@ -677,7 +705,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.3.0", build: "d4f16d9a6990" };
+const APP = { version: "1.3.0", build: "47b4f61e6129" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served

@@ -705,7 +705,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.3.0", build: "47b4f61e6129" };
+const APP = { version: "1.4.0", build: "160abe143ae1" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1010,10 +1010,12 @@ async function pool(list, limit, work) {
 }
 
 // One list of notes: each is read, sent for codes without being asked, then checked one at a time.
-// States: reading -> (scan -> claude) -> ready -> coding -> coded -> done; error = can't be read, failed = no codes yet.
-let coding = 0;
+// States: reading -> (scan -> claude) -> ready -> coding -> coded -> done; error = can't be read, failed = no codes yet,
+// held = the tester cancelled before it got its codes (it stays in the list and can be started again).
+let coding = 0, paused = local.get("tb-paused", false);  // paused: notes being coded finish, no new ones start
+function setPaused(on) { paused = on; local.set("tb-paused", on); pump(); }
 function pump() {
-  while (coding < 2 && settings.key) {
+  while (coding < 2 && settings.key && !paused) {
     const item = pdfs.find((x) => x.state === "ready");
     if (!item) break;
     item.state = "coding"; item.msg = ""; coding++;
@@ -1163,12 +1165,19 @@ function renderPdfs() {
   if (!pdfs.length) { box.innerHTML = ""; return; }
   const scans = pdfs.filter((x) => x.state === "scan" && x.file), failed = pdfs.filter((x) => x.state === "failed");
   const done = pdfs.filter((x) => x.state === "done").length, waiting = pdfs.some((x) => x.state === "ready");
+  const working = pdfs.some((x) => ["ready", "coding"].includes(x.state)), held = pdfs.filter((x) => x.state === "held").length;
+  const have = pdfs.filter((x) => x.result).length;
   const pill = { reading: `<span class="pill">Reading…</span>`, scan: `<span class="pill warn">Scanned: needs Claude</span>`, claude: `<span class="pill accent"><span class="spinner"></span>Claude is reading…</span>`,
-                 ready: `<span class="pill">Waiting its turn</span>`, coding: `<span class="pill accent"><span class="spinner"></span>Getting codes…</span>`,
+                 ready: `<span class="pill">${paused ? "Paused" : "Waiting its turn"}</span>`, coding: `<span class="pill accent"><span class="spinner"></span>Getting codes…</span>`,
+                 held: `<span class="pill">Stopped</span>`,
                  coded: `<span class="pill good">Ready to check</span>`, done: `<span class="pill">✓ Finished</span>`,
                  error: `<span class="pill warn">Can't read</span>`, failed: `<span class="pill warn">No codes yet</span>` };
-  box.innerHTML = `<div class="pdf-q-head"><b>Your notes</b><span class="sub">${done} of ${pdfs.length} finished</span>
+  box.innerHTML = `<div class="pdf-q-head"><b>Your notes</b><span class="sub">${have} of ${pdfs.length} have codes · ${done} checked${working ? (paused ? " · <b>Paused</b>" : " · getting codes…") : ""}</span>
       <span class="right">
+      ${working && !paused && settings.key ? '<button class="btn sm" type="button" data-q-pause>Pause</button>' : ""}
+      ${working && paused ? '<button class="btn sm soft" type="button" data-q-resume>Resume</button>' : ""}
+      ${working ? '<button class="btn sm" type="button" data-q-cancel>Cancel</button>' : ""}
+      ${held ? `<button class="btn sm soft" type="button" data-q-rest>Get codes for the ${held === 1 ? "stopped note" : held + " stopped notes"}</button>` : ""}
       ${scans.length && settings.claudeKey ? `<button class="btn sm soft" type="button" data-pdf-all>Read ${scans.length} scan${scans.length === 1 ? "" : "s"} with Claude</button>` : ""}
       ${scans.length && !settings.claudeKey ? `<button class="btn sm soft" type="button" data-open-settings>Add a Claude key to read scans</button>` : ""}
       ${failed.length > 1 ? `<button class="btn sm soft" type="button" data-pdf-retry-all>Try again for all</button>` : ""}
@@ -1182,6 +1191,7 @@ function renderPdfs() {
       <span class="acts">
         ${x.state === "coded" && x.id !== pdfOpen ? `<button class="btn sm soft" type="button" data-pdf-open="${x.id}">Check this note</button>` : ""}
         ${x.state === "failed" ? `<button class="btn sm soft" type="button" data-pdf-retry="${x.id}">Try again</button>` : ""}
+        ${x.state === "held" ? `<button class="btn sm soft" type="button" data-pdf-retry="${x.id}">Get codes</button>` : ""}
         ${x.state === "scan" && x.file && settings.claudeKey ? `<button class="btn sm" type="button" data-pdf-claude="${x.id}">${x.failed ? "Try again" : "Read with Claude"}</button>` : ""}
         ${x.state === "claude" ? `<button class="btn sm" type="button" data-pdf-cancel="${x.id}">Cancel</button>` : ""}
         ${x.file && x.kind === "pdf" && x.state !== "error" ? `<button class="btn sm" type="button" data-pdf-view="${x.id}">See the PDF</button>` : ""}
@@ -1342,9 +1352,23 @@ $("#pdf-q").onclick = async (e) => {
   if (b.hasAttribute("data-pdf-all")) sendToClaude(pdfs.filter((x) => x.state === "scan" && x.file));
   else if (b.hasAttribute("data-pdf-open")) openItem(item("data-pdf-open"));
   else if (b.hasAttribute("data-pdf-claude")) sendToClaude([item("data-pdf-claude")]);
-  else if (b.hasAttribute("data-pdf-retry")) { item("data-pdf-retry").state = "ready"; pump(); }
+  else if (b.hasAttribute("data-pdf-retry")) { item("data-pdf-retry").state = "ready"; pump(); if (paused) toast("This note will get its codes when you press Resume."); }
   else if (b.hasAttribute("data-pdf-retry-all")) { pdfs.forEach((x) => { if (x.state === "failed") x.state = "ready"; }); pump(); }
   else if (b.hasAttribute("data-pdf-cancel")) { const x = item("data-pdf-cancel"); x.abort?.abort(); x.state = "scan"; x.msg = ""; renderPdfs(); }
+  else if (b.hasAttribute("data-q-pause")) { setPaused(true); toast("Paused. Notes already being coded will finish."); }
+  else if (b.hasAttribute("data-q-resume")) setPaused(false);
+  else if (b.hasAttribute("data-q-cancel")) {
+    // what already has codes is kept; the rest stay in the list as "Stopped"
+    let n = 0;
+    for (const x of pdfs) {
+      if (x.state === "ready" || x.state === "coding") { x.state = "held"; x.msg = ""; x.abort?.abort(); n++; }
+      else if (x.state === "claude") { x.abort?.abort(); x.state = "scan"; x.msg = ""; }
+    }
+    paused = false; local.set("tb-paused", false);
+    renderPdfs();
+    toast(`Cancelled. ${n} note${n === 1 ? "" : "s"} stopped; the ones that already have codes are kept.`);
+  }
+  else if (b.hasAttribute("data-q-rest")) { pdfs.forEach((x) => { if (x.state === "held") x.state = "ready"; }); setPaused(false); }
   else if (b.hasAttribute("data-pdf-view")) viewPdf(item("data-pdf-view"));
   else if (b.hasAttribute("data-pdf-xlsx")) exportXlsx();
   else if (b.hasAttribute("data-pdf-remove")) { dropItem(item("data-pdf-remove")); pump(); }
@@ -1895,7 +1919,7 @@ renderConn();
 refreshCount();
 if (cur) renderResult();
 queueStore.get("queue").catch(() => null).then((saved) => {
-  const old = (saved?.pdfs || []).filter((x) => x.text && ["ready", "coding", "coded", "done", "failed"].includes(x.state))
+  const old = (saved?.pdfs || []).filter((x) => x.text && ["ready", "coding", "coded", "done", "failed", "held"].includes(x.state))
     .map((x) => ({ ...x, state: x.state === "coding" ? "ready" : x.state }));
   sheets = { ...(saved?.sheets || {}), ...sheets };
   const top = old.reduce((m, x) => Math.max(m, x.id), 0);

@@ -711,7 +711,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.5.1", build: "5847e35931bf" };
+const APP = { version: "1.5.2", build: "fd4222eeaf49" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1483,6 +1483,7 @@ function codeInput(input, check, onPick, onCommit) {
     onCommit(checkCode(input.value)); input.value = ""; check.textContent = "";
   };
   const pick = (e) => { input.value = e.c; close(); update(); commit(); };
+  input.commitNow = () => { close(); input.value = normCode(input.value); commit(); };  // a code still in the box when the note is finished
   const show = async () => {
     await loadCodes();
     items = searchCodes(input.value);
@@ -1812,6 +1813,7 @@ $("#discard").onclick = async () => {
 };
 $("#add-case").onclick = async () => {
   if (!cur) return;
+  $$(".fix-code").forEach((i) => i.commitNow?.());
   for (const [code, r] of Object.entries(cur.reviews)) {
     if (r.verdict === "correct") continue;
     if (!r.reason?.trim()) { toast(r.verdict === "details" ? `Say what is wrong with the details shown for ${code}.` : `Add the reason for ${code}.`, "err"); $(`.cc[data-code="${CSS.escape(code)}"] .fix-reason`)?.focus(); return; }

@@ -455,6 +455,9 @@
   .seg.verdict, .seg.poss-verdict { display: flex; flex-wrap: wrap; gap: 8px; background: none; border: 0; padding: 0; }
   .seg.poss-verdict button { border: 1px solid var(--border-strong); border-radius: 10px; }
   .fix { margin-top: 14px; gap: 10px; }
+  .cc.v-details { border-color: color-mix(in srgb, var(--warning) 50%, transparent); }
+  .cc.v-details::before { background: linear-gradient(180deg, var(--warning), color-mix(in srgb, var(--warning) 45%, transparent)); }
+  .seg.verdict button[data-v="details"][aria-pressed="true"] { background: var(--warn-wash); color: color-mix(in srgb, var(--warning) 80%, var(--text)); border-color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning); }
   .quote { margin: 4px 0; } .quote-hint { display: block; margin-top: 4px; }
   .codes { gap: 16px; }
   .poss-note { margin-bottom: 16px; }
@@ -707,7 +710,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.4.2", build: "6012b4935565" };
+const APP = { version: "1.5.0", build: "a776c0d95bc6" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1321,7 +1324,7 @@ async function exportXlsx() {
   const cell = (v) => String(v ?? "").slice(0, 32000);  // Excel's limit for one cell
   const said = (x, c) => {
     const r = (checks(x).reviews || {})[c.code];
-    return !r ? "" : r.verdict === "correct" ? "correct" : r.verdict === "wrong" ? `wrong: ${r.reason || ""}` : `should be ${r.with || "?"}: ${r.reason || ""}`;
+    return !r ? "" : r.verdict === "correct" ? "correct" : r.verdict === "details" ? `right code, wrong details: ${r.reason || ""}` : r.verdict === "wrong" ? `wrong: ${r.reason || ""}` : `should be ${r.with || "?"}: ${r.reason || ""}`;
   };
   const only = new Set(items.map((x) => x.sheet || "")).size === 1 ? sheets[items[0].sheet] : null;  // all from one spreadsheet: keep its columns
   const plain = (list) => list.map((k) => k.code.replace(".", "")).join(", ");
@@ -1503,14 +1506,16 @@ let cur = local.get("tb-draft", null);  // kept if the page reloads
 
 /** Counts for one checked note. Codes not marked count as correct. */
 function tally(c) {
-  const t = { suggested: 0, correct: 0, wrong: 0, missed: 0, flagged: 0, flaggedWrong: 0, sameCategory: 0, sug: 0, sugNo: 0, confirmed: 0 };
+  const t = { suggested: 0, correct: 0, wrong: 0, missed: 0, flagged: 0, flaggedWrong: 0, sameCategory: 0, sug: 0, sugNo: 0, confirmed: 0, details: 0 };
   for (const x of c.result.codes || []) {
     const r = c.reviews[x.code];
-    if (r?.verdict === "correct") t.confirmed++;
-    if (x.part === "history") { t.sug++; if (r && r.verdict !== "correct") t.sugNo++; continue; }  // a suggestion from the rest of the note
+    const ok = !r || r.verdict === "correct" || r.verdict === "details";  // "details": right code, wrong diagnosis name / reason / quote
+    if (r && ok) t.confirmed++;
+    if (r?.verdict === "details") t.details++;
+    if (x.part === "history") { t.sug++; if (!ok) t.sugNo++; continue; }  // a suggestion from the rest of the note
     t.suggested++;
     if (x.needs_review) t.flagged++;
-    if (r && r.verdict !== "correct") {
+    if (!ok) {
       t.wrong++;
       if (x.needs_review) t.flaggedWrong++;
       if (r.verdict === "replace" && r.with) { t.missed++; if (r.with.slice(0, 3) === x.code.slice(0, 3)) t.sameCategory++; }
@@ -1543,6 +1548,8 @@ function totals(list) {
 
 const CONF = { high: "good", medium: "warn", low: "bad" };
 const CONF_TEXT = { high: "The coder is sure", medium: "The coder is fairly sure", low: "The coder is not sure" };
+const REASON_ASK = "Please tell us why. What in the note shows this?";
+const DETAILS_ASK = "The code is right. What is wrong with what's shown? For example: the diagnosis name is for another drug, or the words quoted from the note don't belong to this code.";
 const STATUS_TEXT = { suspected: "Uncertain in the note", history: "Past history", negated: "Note says no, or ruled out", family_history: "Family history" };
 function codeCard(x, i) {
   const r = cur.reviews[x.code] || {}, sug = x.part === "history";
@@ -1569,13 +1576,14 @@ function codeCard(x, i) {
     <div class="cc-actions">
       <span class="seg verdict" role="group" aria-label="Is ${esc(x.code)} right?">
         <button type="button" data-v="correct" aria-pressed="${v === "correct"}">${sug ? "✓ Yes, code it" : "✓ Correct"}</button>
+        <button type="button" data-v="details" aria-pressed="${v === "details"}">✓ Right code, wrong details</button>
         <button type="button" data-v="wrong" aria-pressed="${v === "wrong"}">${sug ? "✗ No, don't code it" : "✗ Wrong: remove this code"}</button>
         <button type="button" data-v="replace" aria-pressed="${v === "replace"}">${sug ? "↺ Needs a different code" : "↺ Wrong: needs a different code"}</button>
       </span>
     </div>
-    <div class="fix" ${v === "wrong" || v === "replace" ? "" : "hidden"}>
+    <div class="fix" ${v === "wrong" || v === "replace" || v === "details" ? "" : "hidden"}>
       <div class="codebox" ${v === "replace" ? "" : "hidden"}><input type="text" class="fix-code" placeholder="Type the right code, or words to search for it" value="${esc(r.with || "")}" aria-label="The right code"><div class="code-check"></div></div>
-      <textarea class="fix-reason" placeholder="Please tell us why. What in the note shows this?" aria-label="Reason">${esc(r.reason || "")}</textarea>
+      <textarea class="fix-reason" placeholder="${v === "details" ? DETAILS_ASK : REASON_ASK}" aria-label="Reason">${esc(r.reason || "")}</textarea>
     </div>
   </article>`;
 }
@@ -1713,9 +1721,10 @@ function renderResult() {
     const now = cur.reviews[code]?.verdict || "";
     card.className = "cc " + (now ? "v-" + now : "");
     $$(".verdict button", card).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === now)));
-    $(".fix", card).hidden = !(now === "wrong" || now === "replace");
+    $(".fix", card).hidden = !(now === "wrong" || now === "replace" || now === "details");
     $(".codebox", card).hidden = now !== "replace";
-    if (now === "wrong" || now === "replace") ($(now === "replace" ? ".fix-code" : ".fix-reason", card)).focus();
+    $(".fix-reason", card).placeholder = now === "details" ? DETAILS_ASK : REASON_ASK;
+    if (now === "wrong" || now === "replace" || now === "details") ($(now === "replace" ? ".fix-code" : ".fix-reason", card)).focus();
     changed();
   };
   // missing codes
@@ -1769,7 +1778,7 @@ $("#add-case").onclick = async () => {
   if (!cur) return;
   for (const [code, r] of Object.entries(cur.reviews)) {
     if (r.verdict === "correct") continue;
-    if (!r.reason?.trim()) { toast(`Add the reason for ${code}.`, "err"); $(`.cc[data-code="${CSS.escape(code)}"] .fix-reason`)?.focus(); return; }
+    if (!r.reason?.trim()) { toast(r.verdict === "details" ? `Say what is wrong with the details shown for ${code}.` : `Add the reason for ${code}.`, "err"); $(`.cc[data-code="${CSS.escape(code)}"] .fix-reason`)?.focus(); return; }
     if (r.verdict === "replace" && !r.with) { toast(`Type the right code for ${code}, or choose "Wrong" instead.`, "err"); $(`.cc[data-code="${CSS.escape(code)}"] .fix-code`)?.focus(); return; }
   }
   const wasSaved = cur.saved;
@@ -1882,15 +1891,21 @@ function reportMarkdown(list) {
     `| Marked correct by hand | ${s.confirmed} of ${s.suggested + s.sug} | the rest were left unmarked, which counts as correct |`,
     `| Replacements in the same category | ${s.sameCategory} | wrong code and right code share the first 3 characters (near misses) |`,
     `| Time per note | ${fmtSec(s.medianMs)} median | average ${fmtSec(s.avgMs)} |`, "");
-  const wrong = [], missed = [];
+  const wrong = [], missed = [], details = [];
   d.cases.forEach((c) => {
-    c.coder_codes.filter((x) => x.verdict !== "correct").forEach((x) => wrong.push({ ...x, case: c.case }));
+    c.coder_codes.filter((x) => x.verdict !== "correct" && x.verdict !== "details").forEach((x) => wrong.push({ ...x, case: c.case }));
+    c.coder_codes.filter((x) => x.verdict === "details").forEach((x) => details.push({ ...x, case: c.case }));
     c.missed.forEach((m) => missed.push({ ...m, case: c.case }));
   });
   out.push(`## Codes the coder got wrong (${wrong.length})`, "");
   if (wrong.length) {
     out.push(`| Note | Coder's code | Should be | Tester's reason | Coder's reason |`, `|---|---|---|---|---|`);
     wrong.forEach((x) => out.push(`| ${x.case} | ${x.part?.startsWith("suggested") ? "(suggestion) " : ""}${x.code} ${mdCell(x.description)} | ${x.replace_with ? x.replace_with + " " + mdCell(CODES?.map.get(x.replace_with)?.t || "") : "(not coded)"} | ${mdCell(x.tester_reason)} | ${mdCell(x.reason)} |`));
+  } else out.push("None.");
+  out.push("", `## Right code, wrong details (${details.length})`, "", "The code is right, but the diagnosis name, the reason or the words quoted from the note are wrong. These count as correct codes.", "");
+  if (details.length) {
+    out.push(`| Note | Code | Diagnosis shown | Reason shown | What the tester says is wrong |`, `|---|---|---|---|---|`);
+    details.forEach((x) => out.push(`| ${x.case} | ${x.code} ${mdCell(x.description)} | ${mdCell(x.condition)} | ${mdCell(x.reason)} | ${mdCell(x.tester_reason)} |`));
   } else out.push("None.");
   out.push("", `## Codes the coder missed (${missed.length})`, "");
   if (missed.length) {
@@ -1910,7 +1925,7 @@ function reportMarkdown(list) {
       `Checked ${fmtDate(c.checked)} · ${c.options.setting === "inpatient" ? "hospital stay" : "office visit"} · ${c.options.scope === "both" ? "visit codes plus suggestions" : c.options.scope === "all" ? "everything documented" : "this visit"} · ${fmtSec(c.seconds * 1000)}`, "");
     if (c.comment) out.push(`**Tester's comment:** ${c.comment}`, "");
     out.push(`| # | Code | Description | Tester |`, `|---|---|---|---|`);
-    c.coder_codes.forEach((x, i) => out.push(`| ${i + 1}${x.part?.startsWith("suggested") ? " (suggestion)" : ""} | ${x.code} | ${mdCell(x.description)} | ${x.verdict === "correct" ? "✓ correct" : x.verdict === "wrong" ? "✗ wrong: " + mdCell(x.tester_reason) : "↺ should be " + x.replace_with + ": " + mdCell(x.tester_reason)} |`));
+    c.coder_codes.forEach((x, i) => out.push(`| ${i + 1}${x.part?.startsWith("suggested") ? " (suggestion)" : ""} | ${x.code} | ${mdCell(x.description)} | ${x.verdict === "correct" ? "✓ correct" : x.verdict === "details" ? "✓ right code, wrong details: " + mdCell(x.tester_reason) : x.verdict === "wrong" ? "✗ wrong: " + mdCell(x.tester_reason) : "↺ should be " + x.replace_with + ": " + mdCell(x.tester_reason)} |`));
     c.missed.forEach((m) => out.push(`| + | ${m.code} | ${mdCell(m.title)} | missed: ${mdCell(m.reason)} |`));
     out.push("", `Note read from: ${c.source}.`);
     out.push("", "<details><summary>Note text</summary>", "", "```", c.note.replace(/```/g, "ˋˋˋ"), "```", "</details>", "");

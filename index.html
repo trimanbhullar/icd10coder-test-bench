@@ -705,7 +705,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.4.0", build: "160abe143ae1" };
+const APP = { version: "1.4.1", build: "f529e88cddbc" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1012,10 +1012,11 @@ async function pool(list, limit, work) {
 // One list of notes: each is read, sent for codes without being asked, then checked one at a time.
 // States: reading -> (scan -> claude) -> ready -> coding -> coded -> done; error = can't be read, failed = no codes yet,
 // held = the tester cancelled before it got its codes (it stays in the list and can be started again).
+const AT_ONCE = 8;  // notes getting codes at the same time (the server takes far more; this keeps one tester from crowding out the rest)
 let coding = 0, paused = local.get("tb-paused", false);  // paused: notes being coded finish, no new ones start
 function setPaused(on) { paused = on; local.set("tb-paused", on); pump(); }
 function pump() {
-  while (coding < 2 && settings.key && !paused) {
+  while (coding < AT_ONCE && settings.key && !paused) {
     const item = pdfs.find((x) => x.state === "ready");
     if (!item) break;
     item.state = "coding"; item.msg = ""; coding++;

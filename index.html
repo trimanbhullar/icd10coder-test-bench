@@ -455,6 +455,7 @@
   .seg.verdict, .seg.poss-verdict { display: flex; flex-wrap: wrap; gap: 8px; background: none; border: 0; padding: 0; }
   .seg.poss-verdict button { border: 1px solid var(--border-strong); border-radius: 10px; }
   .fix { margin-top: 14px; gap: 10px; }
+  .with-list { margin-top: 6px; } .with-list:empty { display: none; } .with-list li { align-items: center; }
   .cc.v-details { border-color: color-mix(in srgb, var(--warning) 50%, transparent); }
   .cc.v-details::before { background: linear-gradient(180deg, var(--warning), color-mix(in srgb, var(--warning) 45%, transparent)); }
   .seg.verdict button[data-v="details"][aria-pressed="true"] { background: var(--warn-wash); color: color-mix(in srgb, var(--warning) 80%, var(--text)); border-color: var(--warning); box-shadow: inset 0 0 0 1px var(--warning); }
@@ -710,7 +711,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.5.0", build: "a776c0d95bc6" };
+const APP = { version: "1.5.1", build: "5847e35931bf" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1459,12 +1460,15 @@ function searchCodes(q) {
   return out.sort((a, b) => a.t.length - b.t.length).slice(0, 10);
 }
 /** Names a typed code when it's in the list. Testers can enter anything, so nothing here is an error. */
+/** The codes a tester gave in place of a wrong one: one or several, kept as "I34.0, I35.1". */
+const withList = (r) => String(r?.with || "").split(/\s*,\s*/).filter(Boolean);
+const WITH_ASK = "Type the right code, or words to search for it", WITH_MORE = "Add another code, if it needs more than one";
 function checkCode(raw) {
   const c = normCode(raw), e = CODES?.map.get(c);
   return { code: c, text: e ? `${c} · ${e.t}` : "", title: e?.t || "" };
 }
 /** Wires a code input: suggestions while typing, and the code's name under it. */
-function codeInput(input, check, onPick) {
+function codeInput(input, check, onPick, onCommit) {
   const box = input.closest(".codebox");
   let list = null, sel = -1, items = [];
   const close = () => { list?.remove(); list = null; sel = -1; };
@@ -1473,7 +1477,12 @@ function codeInput(input, check, onPick) {
     check.textContent = r.text;
     onPick?.(r);
   };
-  const pick = (e) => { input.value = e.c; close(); update(); };
+  // with onCommit, a code that is picked, entered or left in the box is handed over and the box emptied for the next
+  const commit = () => {
+    if (!onCommit || !input.value.trim()) return;
+    onCommit(checkCode(input.value)); input.value = ""; check.textContent = "";
+  };
+  const pick = (e) => { input.value = e.c; close(); update(); commit(); };
   const show = async () => {
     await loadCodes();
     items = searchCodes(input.value);
@@ -1485,8 +1494,13 @@ function codeInput(input, check, onPick) {
   };
   input.addEventListener("focus", () => loadCodes().then(update));
   input.addEventListener("input", show);
-  input.addEventListener("blur", () => setTimeout(() => { close(); input.value = normCode(input.value); update(); }, 120));
+  input.addEventListener("blur", () => setTimeout(() => { close(); input.value = normCode(input.value); update(); commit(); }, 120));
   input.addEventListener("keydown", (ev) => {
+    if (onCommit && ev.key === "Enter" && !(list && sel >= 0)) {
+      ev.preventDefault(); close();
+      loadCodes().catch(() => {}).then(() => { input.value = normCode(input.value); commit(); });
+      return;
+    }
     if (!list) return;
     if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
       ev.preventDefault();
@@ -1518,7 +1532,7 @@ function tally(c) {
     if (!ok) {
       t.wrong++;
       if (x.needs_review) t.flaggedWrong++;
-      if (r.verdict === "replace" && r.with) { t.missed++; if (r.with.slice(0, 3) === x.code.slice(0, 3)) t.sameCategory++; }
+      if (r.verdict === "replace") for (const w of withList(r)) { t.missed++; if (w.slice(0, 3) === x.code.slice(0, 3)) t.sameCategory++; }
     } else t.correct++;
   }
   t.missed += c.missed.length;
@@ -1582,7 +1596,7 @@ function codeCard(x, i) {
       </span>
     </div>
     <div class="fix" ${v === "wrong" || v === "replace" || v === "details" ? "" : "hidden"}>
-      <div class="codebox" ${v === "replace" ? "" : "hidden"}><input type="text" class="fix-code" placeholder="Type the right code, or words to search for it" value="${esc(r.with || "")}" aria-label="The right code"><div class="code-check"></div></div>
+      <div class="codebox" ${v === "replace" ? "" : "hidden"}><input type="text" class="fix-code" placeholder="${withList(r).length ? WITH_MORE : WITH_ASK}" aria-label="The right code"><div class="code-check"></div><ul class="item-list with-list"></ul></div>
       <textarea class="fix-reason" placeholder="${v === "details" ? DETAILS_ASK : REASON_ASK}" aria-label="Reason">${esc(r.reason || "")}</textarea>
     </div>
   </article>`;
@@ -1694,8 +1708,24 @@ function renderResult() {
   $$(".cc[data-code]", box).forEach((card) => {
     const code = card.dataset.code;
     const fixCode = $(".fix-code", card), check = $(".code-check", card);
-    const update = codeInput(fixCode, check, (r) => { const rv = cur.reviews[code]; if (rv && rv.verdict === "replace") { rv.with = r.code; changed(); } });
-    if (fixCode.value) loadCodes().then(update);
+    const drawWith = () => {
+      const l = withList(cur.reviews[code]);
+      $(".with-list", card).innerHTML = l.map((c) => `<li><b class="mono">${esc(c)}</b><span class="grow">${esc(CODES?.map.get(c)?.t || "")}</span>
+        <button class="btn sm" type="button" data-unwith="${esc(c)}" aria-label="Remove ${esc(c)}">Remove</button></li>`).join("");
+      fixCode.placeholder = l.length ? WITH_MORE : WITH_ASK;
+    };
+    card.drawWith = drawWith;
+    codeInput(fixCode, check, null, (r) => {
+      const rv = cur.reviews[code];
+      if (!rv || rv.verdict !== "replace" || !r.code) return;
+      if (r.code === code) { toast(`${code} is the code you are replacing. Type the code it should be.`, "err"); return; }
+      const l = withList(rv);
+      if (!l.includes(r.code)) l.push(r.code);
+      rv.with = l.join(", ");
+      drawWith(); changed();
+    });
+    drawWith();
+    if (withList(cur.reviews[code]).length) loadCodes().then(drawWith).catch(() => {});
     $(".fix-reason", card).addEventListener("input", (e) => { if (cur.reviews[code]) { cur.reviews[code].reason = e.target.value; changed(); } });
   });
   box.onclick = (e) => {
@@ -1710,6 +1740,12 @@ function renderResult() {
       card.className = "cc poss " + (now ? "p-" + now : "");
       $$(".poss-verdict button", card).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === now)));
       changed();
+      return;
+    }
+    const un = e.target.closest("[data-unwith]");
+    if (un) {
+      const card = un.closest(".cc"), rv = cur.reviews[card.dataset.code];
+      if (rv) { rv.with = withList(rv).filter((c) => c !== un.dataset.unwith).join(", "); card.drawWith(); changed(); }
       return;
     }
     const vb = e.target.closest(".verdict button");
@@ -1900,7 +1936,7 @@ function reportMarkdown(list) {
   out.push(`## Codes the coder got wrong (${wrong.length})`, "");
   if (wrong.length) {
     out.push(`| Note | Coder's code | Should be | Tester's reason | Coder's reason |`, `|---|---|---|---|---|`);
-    wrong.forEach((x) => out.push(`| ${x.case} | ${x.part?.startsWith("suggested") ? "(suggestion) " : ""}${x.code} ${mdCell(x.description)} | ${x.replace_with ? x.replace_with + " " + mdCell(CODES?.map.get(x.replace_with)?.t || "") : "(not coded)"} | ${mdCell(x.tester_reason)} | ${mdCell(x.reason)} |`));
+    wrong.forEach((x) => out.push(`| ${x.case} | ${x.part?.startsWith("suggested") ? "(suggestion) " : ""}${x.code} ${mdCell(x.description)} | ${x.replace_with ? withList({ with: x.replace_with }).map((w) => w + " " + mdCell(CODES?.map.get(w)?.t || "")).join("; ") : "(not coded)"} | ${mdCell(x.tester_reason)} | ${mdCell(x.reason)} |`));
   } else out.push("None.");
   out.push("", `## Right code, wrong details (${details.length})`, "", "The code is right, but the diagnosis name, the reason or the words quoted from the note are wrong. These count as correct codes.", "");
   if (details.length) {

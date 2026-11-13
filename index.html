@@ -146,6 +146,8 @@
   .pdf-row.open { background: var(--accent-wash); }
   .pdf-row .name { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
   .pdf-row .msg { flex: 1 1 100%; color: var(--text-2); font-size: 12.5px; }
+  .pdf-row.off { background: var(--crit-wash); border-left: 3px solid var(--critical); }
+  .pdf-row.off .msg { flex: 1 1 300px; color: var(--text); font-weight: 600; font-size: inherit; }
   .pdf-row .acts { display: flex; flex-wrap: wrap; gap: 6px; }
   .card.dropping { outline: 2px dashed var(--accent); outline-offset: -4px; }
   .waiting { display: flex; gap: 12px; align-items: center; color: var(--text-2); }
@@ -705,7 +707,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.4.1", build: "f529e88cddbc" };
+const APP = { version: "1.4.2", build: "6012b4935565" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1015,8 +1017,29 @@ async function pool(list, limit, work) {
 const AT_ONCE = 8;  // notes getting codes at the same time (the server takes far more; this keeps one tester from crowding out the rest)
 let coding = 0, paused = local.get("tb-paused", false);  // paused: notes being coded finish, no new ones start
 function setPaused(on) { paused = on; local.set("tb-paused", on); pump(); }
+// offline: the coder (or its server) is off. Said once above the list; the notes wait and start by themselves when it's back.
+const STARTING = "The ICD-10 Coder is starting up. Your notes will get their codes by themselves in a minute or two.";
+const OFF_LINE = "The ICD-10 Coder is offline. Please contact Triman to have it started. Your notes will get their codes by themselves once it's back.";
+let offline = "", offTimer = 0;
+function setOffline(msg) {
+  offline = msg;
+  clearTimeout(offTimer);
+  if (msg) offTimer = setTimeout(checkCoder, 20000);
+}
+/** Asks the server (free: no note is sent) whether the coder is there; if so the waiting notes start. */
+async function checkCoder(byHand = false) {
+  if (!offline) return;
+  let back = false;
+  try {
+    const r = await fetch(settings.api + "/models", { headers: { Authorization: "Bearer " + settings.key } });
+    back = r.ok ? ((await r.json()).data || []).some((m) => m.id === MODEL) : [401, 403, 423].includes(r.status);  // a key problem is said by the note itself
+  } catch { /* still not answering */ }
+  if (!offline) return;
+  if (back) { setOffline(""); pump(); if (byHand) toast("The coder is back. Getting codes…"); }
+  else { setOffline(offline); if (byHand) toast("Still offline.", "err"); }
+}
 function pump() {
-  while (coding < AT_ONCE && settings.key && !paused) {
+  while (coding < AT_ONCE && settings.key && !paused && !offline) {
     const item = pdfs.find((x) => x.state === "ready");
     if (!item) break;
     item.state = "coding"; item.msg = ""; coding++;
@@ -1034,7 +1057,7 @@ async function askCoder(note, scope, setting, signal) {
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = body?.error?.message || "", code = body?.error?.code || "";
-    if (OFF_CODES.includes(code)) throw new Error(/starting/i.test(msg) ? "The ICD-10 Coder service is starting up. Please try again in a minute or two." : OFFLINE);
+    if (OFF_CODES.includes(code)) throw Object.assign(new Error(OFFLINE), { off: /starting/i.test(msg) ? STARTING : OFF_LINE });
     if (r.status === 401) throw new Error("Your tester key wasn't accepted. Check it in Settings.");
     if (r.status === 403) throw new Error("Your tester key is paused. Ask Triman to switch it back on.");
     if (r.status === 423) throw new Error("Testing is switched off right now. " + msg);
@@ -1070,6 +1093,12 @@ async function codeItem(item) {
     if (!cur) openItem(item, false);
   } catch (err) {
     if (item.state !== "coding") return;  // removed while waiting
+    if (err?.off || unreachable(err)) {  // the coder is off: this note waits with the rest
+      item.state = "ready"; item.msg = "";
+      setOffline(err.off || OFF_LINE);
+      abort.abort();
+      return;
+    }
     item.state = "failed";
     item.msg = err?.name === "AbortError" || err === "timeout" ? "No answer after 15 minutes. Try again later."
       : unreachable(err) ? UNREACHABLE
@@ -1169,11 +1198,11 @@ function renderPdfs() {
   const working = pdfs.some((x) => ["ready", "coding"].includes(x.state)), held = pdfs.filter((x) => x.state === "held").length;
   const have = pdfs.filter((x) => x.result).length;
   const pill = { reading: `<span class="pill">Reading…</span>`, scan: `<span class="pill warn">Scanned: needs Claude</span>`, claude: `<span class="pill accent"><span class="spinner"></span>Claude is reading…</span>`,
-                 ready: `<span class="pill">${paused ? "Paused" : "Waiting its turn"}</span>`, coding: `<span class="pill accent"><span class="spinner"></span>Getting codes…</span>`,
+                 ready: `<span class="pill">${paused ? "Paused" : offline ? "Waiting for the coder" : "Waiting its turn"}</span>`, coding: `<span class="pill accent"><span class="spinner"></span>Getting codes…</span>`,
                  held: `<span class="pill">Stopped</span>`,
                  coded: `<span class="pill good">Ready to check</span>`, done: `<span class="pill">✓ Finished</span>`,
                  error: `<span class="pill warn">Can't read</span>`, failed: `<span class="pill warn">No codes yet</span>` };
-  box.innerHTML = `<div class="pdf-q-head"><b>Your notes</b><span class="sub">${have} of ${pdfs.length} have codes · ${done} checked${working ? (paused ? " · <b>Paused</b>" : " · getting codes…") : ""}</span>
+  box.innerHTML = `<div class="pdf-q-head"><b>Your notes</b><span class="sub">${have} of ${pdfs.length} have codes · ${done} checked${working ? (paused ? " · <b>Paused</b>" : offline ? " · waiting for the coder" : " · getting codes…") : ""}</span>
       <span class="right">
       ${working && !paused && settings.key ? '<button class="btn sm" type="button" data-q-pause>Pause</button>' : ""}
       ${working && paused ? '<button class="btn sm soft" type="button" data-q-resume>Resume</button>' : ""}
@@ -1184,6 +1213,7 @@ function renderPdfs() {
       ${failed.length > 1 ? `<button class="btn sm soft" type="button" data-pdf-retry-all>Try again for all</button>` : ""}
       ${pdfs.some((x) => x.result) ? '<button class="btn sm" type="button" data-pdf-xlsx>Download results (Excel)</button>' : ""}
       <button class="btn sm" type="button" data-pdf-clear>Remove all</button></span></div>
+    ${offline && working ? `<div class="pdf-row off" role="alert"><span class="msg">${esc(offline)}</span><button class="btn sm" type="button" data-q-recheck>Check again</button></div>` : ""}
     ${waiting && !settings.key ? `<div class="pdf-row"><span class="msg">Enter your tester key to get the codes for these notes.</span><button class="btn sm soft" type="button" data-open-settings>Enter my key</button></div>` : ""}
     ${scans.length ? `<div class="pdf-row"><span class="msg">Reading a scan sends the whole PDF to Anthropic using ${settings.claudeKey ? "your key, and it's billed to that key's account" : "a Claude key"}. Nothing is sent until you press the button.</span></div>` : ""}
     ${pdfs.map((x, i) => `<div class="pdf-row ${x.id === pdfOpen ? "open" : ""}">
@@ -1356,6 +1386,7 @@ $("#pdf-q").onclick = async (e) => {
   else if (b.hasAttribute("data-pdf-retry")) { item("data-pdf-retry").state = "ready"; pump(); if (paused) toast("This note will get its codes when you press Resume."); }
   else if (b.hasAttribute("data-pdf-retry-all")) { pdfs.forEach((x) => { if (x.state === "failed") x.state = "ready"; }); pump(); }
   else if (b.hasAttribute("data-pdf-cancel")) { const x = item("data-pdf-cancel"); x.abort?.abort(); x.state = "scan"; x.msg = ""; renderPdfs(); }
+  else if (b.hasAttribute("data-q-recheck")) checkCoder(true);
   else if (b.hasAttribute("data-q-pause")) { setPaused(true); toast("Paused. Notes already being coded will finish."); }
   else if (b.hasAttribute("data-q-resume")) setPaused(false);
   else if (b.hasAttribute("data-q-cancel")) {
@@ -1921,7 +1952,8 @@ refreshCount();
 if (cur) renderResult();
 queueStore.get("queue").catch(() => null).then((saved) => {
   const old = (saved?.pdfs || []).filter((x) => x.text && ["ready", "coding", "coded", "done", "failed", "held"].includes(x.state))
-    .map((x) => ({ ...x, state: x.state === "coding" ? "ready" : x.state }));
+    .map((x) => ({ ...x, state: x.state === "coding" ? "ready" : x.state }))
+    .map((x) => x.state === "failed" && (x.msg === OFFLINE || x.msg === UNREACHABLE || /starting up/.test(x.msg || "")) ? { ...x, state: "ready", msg: "" } : x);
   sheets = { ...(saved?.sheets || {}), ...sheets };
   const top = old.reduce((m, x) => Math.max(m, x.id), 0);
   pdfs.forEach((x) => { x.id += top; });  // anything added in the first instant keeps a distinct number

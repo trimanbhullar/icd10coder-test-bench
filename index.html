@@ -427,6 +427,10 @@
   button.quote { width: 100%; text-align: left; border: 0; border-left: 3px solid color-mix(in srgb, var(--text-2) 40%, transparent); cursor: pointer; color: inherit; }
   button.quote:hover { background: var(--accent-wash); border-left-color: var(--accent); }
   .quote-hint { font-size: 13px; color: var(--text-2); }
+  button.quote.qp { display: flex; flex-direction: column; gap: 2px; }
+  .qp-where { font: 600 11px/1.3 var(--body); letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); }
+  .qp-where.off { color: var(--warning); }
+  .qp-words { display: block; }
   .cc[data-part="history"] { border-style: dashed; }
   .pill .spinner { width: 12px; height: 12px; border-width: 2px; }
   .pdf-row .name b { font-weight: 600; }
@@ -711,7 +715,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.5.3", build: "f8a7f77fbc62" };
+const APP = { version: "1.5.5", build: "c65da73a7807" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1582,8 +1586,8 @@ function codeCard(x, i) {
     x.reason ? `<dt>Why this code</dt><dd>${esc(x.reason)}</dd>` : "",
     x.correction ? `<dt>Correction</dt><dd>${esc(x.correction)}</dd>` : "",
     (x.review_reasons || []).length ? `<dt>Please check</dt><dd>${x.review_reasons.map(esc).join("<br>")}</dd>` : "",
-    (x.evidence || []).length ? `<dt>From the note</dt><dd>${x.evidence.map((q) => `<button type="button" class="quote" title="Show this in the note">${esc(q)}</button>`).join("")}<span class="quote-hint">Click the words to find them in the note.</span></dd>` : "",
-    (x.sections || []).length ? `<dt>Where in the note</dt><dd>${esc(x.sections.map(sectionName).join(", "))}</dd>` : "",
+    (x.evidence || []).length ? `<dt>From the note</dt><dd>${quotePieces(x).map((p) => `<button type="button" class="quote qp" title="Show this in the note" data-q="${esc(p.words)}">${p.where ? `<span class="qp-where">${esc(p.where)}</span>` : !p.f ? '<span class="qp-where off">Not word for word in the note</span>' : ""}<span class="qp-words">${esc(p.words)}</span></button>`).join("")}<span class="quote-hint">Click the words to find them in the note.</span></dd>` : "",
+    (x.sections || []).length && !quotePieces(x).some((p) => p.where) ? `<dt>Where in the note</dt><dd>${esc(x.sections.map(sectionName).join(", "))}</dd>` : "",
   ].join("");
   return `<article class="cc ${v ? "v-" + v : ""}" data-code="${esc(x.code)}" data-part="${sug ? "history" : "visit"}" ${x.needs_review ? "data-review" : ""}>
     <div class="cc-head"><span class="seq">${i + 1}</span>
@@ -1628,13 +1632,62 @@ function possCard(x, i) {
   </article>`;
 }
 /** Marks the quoted words in the note beside the codes, so a code can be checked against its source. */
+// the coder may join words from several lines ("subjective fever; Rapid Strep Antigen Test: Negative"): each piece is
+// found on its own, its words in order with any spacing, punctuation or bold marks between them
+const QUOTE_SPLIT = /\.{3}|…|;|\n|\s\|\s/;
+const reLit = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function findPiece(text, piece) {
+  const words = piece.match(/[\p{L}\p{N}°%]+/gu);
+  if (!words) return null;
+  const m = new RegExp(words.map(reLit).join("[^\\p{L}\\p{N}]+"), "iu").exec(text);
+  if (!m) return null;
+  let end = m.index + m[0].length;
+  const open = (s) => (s.match(/[(\[]/g) || []).length - (s.match(/[)\]]/g) || []).length;
+  while (end < text.length && /[)\]]/.test(text[end]) && open(text.slice(m.index, end)) > 0) end++;  // "(ICD-10: J02.9)"
+  return { start: m.index, end };
+}
+// where each of the note's sections starts, in document order, for naming the part of the note a quote is in
+function sectionStarts() {
+  const text = cur.note, out = [];
+  let pos = 0;
+  for (const s of cur.result.sections || []) {
+    const f = s.title && findPiece(text.slice(pos), s.title);
+    if (f) { out.push({ at: pos + f.start, s }); pos += f.end; }
+  }
+  return out;
+}
+const SECTION_RANK = (type) => /assess|plan|diagnos|problem|impression/.test(type || "") ? 0
+  : /hpi|present|course|history_of/.test(type || "") ? 1 : 2;
+// a code's quotes, piece by piece, in the note's own words: the assessment's first, then the history, then the rest;
+// within each, the piece that names the diagnosis first, then the note's order
+function quotePieces(x) {
+  const text = cur.note || "", starts = sectionStarts(), seen = new Set(), out = [];
+  const dx = new Set(((x.condition || "").toLowerCase().match(/[a-z]{4,}/g) || []));
+  for (const q of x.evidence || []) {
+    for (const piece of q.split(QUOTE_SPLIT).map((p) => p.trim()).filter((p) => /[\p{L}\p{N}]/u.test(p))) {
+      const f = findPiece(text, piece);
+      const words = (f ? text.slice(f.start, f.end) : piece).replace(/\*\*|__/g, "").replace(/\s+/g, " ").trim();
+      if (seen.has(words.toLowerCase()) || (f && out.some((o) => o.f && f.start < o.f.end && o.f.start < f.end))) continue;
+      seen.add(words.toLowerCase());
+      const sec = f ? [...starts].reverse().find((s) => s.at <= f.start)?.s : null;
+      const names = [...dx].some((w) => words.toLowerCase().includes(w));
+      out.push({ words, f, where: sec ? sec.title : "", rank: f ? SECTION_RANK(sec?.type) : 9, names });
+    }
+  }
+  return out.sort((a, b) => a.rank - b.rank || b.names - a.names || (a.f?.start ?? 1e9) - (b.f?.start ?? 1e9));
+}
 function showInNote(quote) {
-  const view = $("#note-view"), text = cur.note, lit = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const parts = quote.split(/\.{3}|…/).map((x) => x.trim()).filter(Boolean).sort((a, b) => b.length - a.length);
-  let m = null;
-  for (const part of parts) { m = new RegExp(part.split(/\s+/).map(lit).join("\\s+"), "i").exec(text); if (m) break; }
-  if (!m) { toast("These exact words aren't in the note. Please check this code with extra care.", "err"); return; }
-  view.innerHTML = esc(text.slice(0, m.index)) + "<mark>" + esc(m[0]) + "</mark>" + esc(text.slice(m.index + m[0].length));
+  const view = $("#note-view"), text = cur.note;
+  const found = [];
+  for (const part of quote.split(QUOTE_SPLIT).map((x) => x.trim()).filter(Boolean)) {
+    const m = findPiece(text, part);
+    if (m && !found.some((f) => m.start < f.end && f.start < m.end)) found.push(m);
+  }
+  if (!found.length) { toast("These exact words aren't in the note. Please check this code with extra care.", "err"); return; }
+  found.sort((a, b) => a.start - b.start);
+  let html = "", at = 0;
+  for (const f of found) { html += esc(text.slice(at, f.start)) + "<mark>" + esc(text.slice(f.start, f.end)) + "</mark>"; at = f.end; }
+  view.innerHTML = html + esc(text.slice(at));
   const mark = $("mark", view);
   view.scrollTop += mark.getBoundingClientRect().top - view.getBoundingClientRect().top - 80;
   if (view.getBoundingClientRect().bottom < 0 || view.getBoundingClientRect().top > innerHeight) view.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1732,7 +1785,7 @@ function renderResult() {
   });
   box.onclick = (e) => {
     const q = e.target.closest("button.quote");
-    if (q) { showInNote(q.textContent); return; }
+    if (q) { showInNote(q.dataset.q || q.textContent); return; }
     const pv = e.target.closest(".poss-verdict button");
     if (pv) {
       const card = pv.closest("[data-poss]"), i = card.dataset.poss, v = pv.dataset.v;

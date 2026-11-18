@@ -711,7 +711,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.5.2", build: "fd4222eeaf49" };
+const APP = { version: "1.5.3", build: "f8a7f77fbc62" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -1250,7 +1250,8 @@ function saveQueue() {
   if (!queueLoaded) return;  // never write over the saved list before it has been read
   clearTimeout(queueTimer);
   queueTimer = setTimeout(() => {
-    const keep = pdfs.filter((x) => x.text).map(({ file, abort, ...rest }) => rest);
+    // the PDF itself is kept too (in this browser only), so "See the PDF" still works after a reload
+    const keep = pdfs.filter((x) => x.text).map(({ file, abort, ...rest }) => (file && rest.kind === "pdf" ? { ...rest, file } : rest));
     queueStore.set("queue", { pdfs: keep, sheets: Object.fromEntries(Object.entries(sheets).filter(([k]) => pdfs.some((x) => x.sheet === k))) }).catch(() => {});
   }, 400);
 }

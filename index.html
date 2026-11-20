@@ -671,16 +671,26 @@
     <p class="sub" style="margin:0">Kept only in this browser.</p>
     <div class="form">
       <label class="field">Your name<input type="text" id="s-name" autocomplete="name" placeholder="Your name"><small>Shown on your report.</small></label>
-      <label class="field">Tester key<input type="password" id="s-key" autocomplete="off" spellcheck="false" placeholder="Paste your key here"><small>The key Triman gave you. Please don't share it.</small></label>
-      <details><summary class="sub" style="cursor:pointer">Server address (leave this alone)</summary>
-        <label class="field" style="margin-top:10px"><input type="url" id="s-api" spellcheck="false"><small>Only change this if Triman asks you to.</small></label></details>
-      <div class="row"><button class="btn sm" id="s-test" type="button">Test my key</button><span class="sub" id="s-result"></span></div>
+      <label class="field">Get codes from<select id="s-server"><option value="ours">Our coding server (your tester key)</option><option value="gateway">An LLM Gateway (its address and key)</option></select><small>Leave this on our coding server unless Triman gives you a gateway address.</small></label>
+      <div class="form" id="s-ours-box" style="margin-top:0">
+        <label class="field">Tester key<input type="password" id="s-key" autocomplete="off" spellcheck="false" placeholder="Paste your key here"><small>The key Triman gave you. Please don't share it.</small></label>
+        <details><summary class="sub" style="cursor:pointer">Server address (leave this alone)</summary>
+          <label class="field" style="margin-top:10px"><input type="url" id="s-api" spellcheck="false"><small>Only change this if Triman asks you to.</small></label></details>
+        <div class="row"><button class="btn sm" id="s-test" type="button">Test my key</button><span class="sub" id="s-result"></span></div>
+      </div>
+      <div class="form" id="s-gw-box" style="margin-top:0">
+        <label class="field">Gateway address<input type="url" id="s-gw-url" spellcheck="false" placeholder="https://…/v1"><small>The LLM Gateway's https address. Notes are coded there, and it can read scans too.</small></label>
+        <label class="field">Gateway key<input type="password" id="s-gw-key" autocomplete="off" spellcheck="false" placeholder="Paste the gateway's key here"><small>Please don't share it.</small></label>
+        <div class="row"><button class="btn sm" id="s-gw-test" type="button">Connect</button><span class="sub" id="s-gw-result"></span></div>
+      </div>
       <label class="field">Type of notes<select id="s-setting"><option value="outpatient">Office visits (the usual choice)</option><option value="inpatient">Hospital stays</option></select><small>Leave this on office visits unless Triman asks you to change it.</small></label>
-      <label class="field">Read scanned PDFs with<select id="s-reader"><option value="server">Our OCR server</option><option value="claude">Claude (your own Claude key)</option></select><small>Only scans need this; PDFs with real text are read in your browser.</small></label>
+      <label class="field">Read scanned PDFs with<select id="s-reader"><option value="gateway">The LLM Gateway above</option><option value="server">An OCR server</option><option value="claude">Claude (your own Claude key)</option></select><small>Only scans need this; PDFs with real text are read in your browser.</small></label>
       <div class="form" id="s-ocr-box" style="margin-top:0">
+        <div class="form" id="s-ocr-own" style="margin-top:0">
         <label class="field">OCR server address<input type="url" id="s-ocr-url" spellcheck="false" placeholder="https://…/v1"><small>Any OpenAI-compatible address. Each page of a scan goes to this server as a picture when you choose to read it.</small></label>
         <label class="field">OCR key<input type="password" id="s-ocr-key" autocomplete="off" spellcheck="false" placeholder="Paste the server's key here"></label>
         <div class="row"><button class="btn sm" id="s-ocr-load" type="button">Load models</button><span class="sub" id="s-ocr-result"></span></div>
+        </div>
         <label class="field">OCR model<select id="s-ocr-model"><option value="">Load the models first</option></select><small>Chandra models are read with Chandra's own layout prompt and recovery steps; other models get a plain word-for-word prompt.</small></label>
       </div>
       <div class="form" id="s-claude-box" style="margin-top:0">
@@ -724,7 +734,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.5.7", build: "18008c6f1369" };
+const APP = { version: "1.5.8", build: "0a187bdf60b6" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -800,32 +810,89 @@ const db = (() => {
 
 // ---------------------------------------------------------------- settings and connection
 
-let settings = { name: "", key: "", api: DEFAULT_API, claudeKey: "", setting: "outpatient", ocrUrl: "", ocrKey: "", ocrModel: "", ...local.get("tb-settings", {}) };
+let settings = { name: "", key: "", api: DEFAULT_API, claudeKey: "", setting: "outpatient", ocrUrl: "", ocrKey: "", ocrModel: "", server: "ours", gwUrl: "", gwKey: "", ...local.get("tb-settings", {}) };
 if (!settings.reader) settings.reader = settings.claudeKey ? "claude" : "server";
+// "ours": our coding server with a tester key; "gateway": an LLM Gateway's address and key, for coding and (if chosen) scans
+const viaGateway = () => settings.server === "gateway";
+const coderApi = () => viaGateway() ? settings.gwUrl : settings.api;
+const coderKey = () => viaGateway() ? settings.gwKey : settings.key;
+const codingReady = () => !!(coderApi() && coderKey());
+const keyName = () => viaGateway() ? "gateway key" : "tester key";
+const serverName = () => viaGateway() ? "LLM Gateway at " + (settings.gwUrl.replace(/^https?:\/\//, "").split("/")[0] || "?") : "our coding server";
+// where scans go when the reader is an OCR server: the gateway's own address and key, or a separate server's
+const ocrUseGateway = () => settings.reader === "gateway" && viaGateway();
+const ocrApi = () => ocrUseGateway() ? settings.gwUrl : settings.ocrUrl;
+const ocrAuth = () => ocrUseGateway() ? settings.gwKey : settings.ocrKey;
 // scans can be read: the chosen reader is set up
-const scanReady = () => settings.reader === "claude" ? !!settings.claudeKey : !!(settings.ocrUrl && settings.ocrModel);
+const scanReady = () => settings.reader === "claude" ? !!settings.claudeKey : !!(ocrApi() && settings.ocrModel);
 const readerName = () => settings.reader === "claude" ? "Claude" : "OCR";
 if (LOCAL && settings.api !== DEFAULT_API && /127\.0\.0\.1:8093/.test(settings.api)) settings.api = DEFAULT_API;  // the old preview address
 function renderConn() {
-  const ok = !!settings.key;
+  const ok = codingReady();
   $("#conn-pill").className = "pill " + (ok ? "good" : "warn");
   $("#conn-pill").innerHTML = `<span class="dot ${ok ? "on" : ""}"></span><span>${ok ? esc(settings.name || "Tester") : "Not set up"}</span>`;
   $("#welcome").hidden = ok;
 }
 function openSettings() {
   $("#s-name").value = settings.name; $("#s-key").value = settings.key; $("#s-api").value = settings.api; $("#s-claude").value = settings.claudeKey || ""; $("#s-setting").value = settings.setting || "outpatient";
+  $("#s-server").value = settings.server || "ours"; $("#s-gw-url").value = settings.gwUrl || ""; $("#s-gw-key").value = settings.gwKey || "";
   $("#s-reader").value = settings.reader; $("#s-ocr-url").value = settings.ocrUrl || ""; $("#s-ocr-key").value = settings.ocrKey || "";
+  modelLists = { gateway: null, server: null };
+  $("#s-result").textContent = ""; $("#s-claude-result").textContent = ""; $("#s-ocr-result").textContent = ""; $("#s-gw-result").textContent = "";
+  showServer();
   fillModels(settings.ocrModel ? [settings.ocrModel] : [], settings.ocrModel);
-  $("#s-result").textContent = ""; $("#s-claude-result").textContent = ""; $("#s-ocr-result").textContent = "";
-  showReader();
   $("#settings-dlg").showModal();
 }
-function showReader() { const s = $("#s-reader").value; $("#s-ocr-box").hidden = s !== "server"; $("#s-claude-box").hidden = s !== "claude"; }
+// the OCR models each source listed while the dialog is open, so switching the reader back and forth keeps them
+let modelLists = { gateway: null, server: null };
+function showServer() {
+  const gw = $("#s-server").value === "gateway";
+  $("#s-ours-box").hidden = gw; $("#s-gw-box").hidden = !gw;
+  $("#s-reader").querySelector('[value="gateway"]').hidden = !gw;
+  if (!gw && $("#s-reader").value === "gateway") $("#s-reader").value = "server";
+  showReader();
+}
+function showReader() {
+  const s = $("#s-reader").value;
+  $("#s-ocr-box").hidden = s === "claude"; $("#s-ocr-own").hidden = s !== "server"; $("#s-claude-box").hidden = s !== "claude";
+  if (modelLists[s]) fillModels(modelLists[s], $("#s-ocr-model").value);
+}
+$("#s-server").onchange = () => {
+  // a gateway reads scans as well, unless Claude was chosen
+  if ($("#s-server").value === "gateway" && $("#s-reader").value === "server" && !$("#s-ocr-url").value.trim()) $("#s-reader").value = "gateway";
+  showServer();
+};
 $("#s-reader").onchange = showReader;
+// browsers block http:// calls from an https page, except to this computer
+const blockedHttp = (url) => location.protocol === "https:" && /^http:/i.test(url) && !/^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(url);
+const HTTP_BLOCKED = "This page is on https, so browsers won't let it call an http:// address. Use the server's https address (for example its Tailscale name).";
+$("#s-gw-test").onclick = async () => {
+  const out = $("#s-gw-result"), key = $("#s-gw-key").value.trim();
+  const url = $("#s-gw-url").value.trim().replace(/\/+$/, "");
+  if (!url) { out.textContent = "Enter the gateway's address first."; return; }
+  if (!key) { out.textContent = "Enter the gateway's key first."; return; }
+  if (blockedHttp(url)) { out.textContent = HTTP_BLOCKED; return; }
+  out.textContent = "Checking…";
+  try {
+    const { base, ids } = await listModels(url, key);
+    $("#s-gw-url").value = base;
+    const ocr = ids.filter((m) => m !== MODEL);
+    modelLists.gateway = ocr;
+    if ($("#s-reader").value === "gateway") fillModels(ocr, $("#s-ocr-model").value);
+    const chandra = sortModels(ocr).filter((m) => /chandra/i.test(m));
+    out.textContent = (ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but the gateway isn't serving the coder (" + MODEL + ") right now.")
+      + (chandra.length ? ` It can read scans with ${chandra[0]}.` : ocr.length ? " It has no Chandra model for scans." : "");
+  } catch (err) {
+    out.textContent = unreachable(err) ? "Couldn't reach the gateway. Check the address, that it's on, and that it allows calls from this page (CORS)." : "Couldn't connect: " + err.message + ".";
+  }
+};
 // newest Chandra first, then everything else
-function fillModels(ids, pick) {
+function sortModels(ids) {
   const ver = (id) => +(id.match(/(\d+(?:\.\d+)?)(?!.*\d)/)?.[1] || 0);
-  ids = [...new Set(ids)].sort((a, b) => (/chandra/i.test(b) - /chandra/i.test(a)) || ver(b) - ver(a) || a.localeCompare(b));
+  return [...new Set(ids)].sort((a, b) => (/chandra/i.test(b) - /chandra/i.test(a)) || ver(b) - ver(a) || a.localeCompare(b));
+}
+function fillModels(ids, pick) {
+  ids = sortModels(ids);
   $("#s-ocr-model").innerHTML = ids.length ? ids.map((id) => `<option value="${esc(id)}">${esc(id)}${/chandra/i.test(id) ? " (Chandra layout reading)" : ""}</option>`).join("")
     : `<option value="">Load the models first</option>`;
   $("#s-ocr-model").value = ids.includes(pick) ? pick : ids[0] || "";
@@ -834,14 +901,13 @@ $("#s-ocr-load").onclick = async () => {
   const out = $("#s-ocr-result"), key = $("#s-ocr-key").value.trim();
   let url = $("#s-ocr-url").value.trim().replace(/\/+$/, "");
   if (!url) { out.textContent = "Enter the server's address first."; return; }
-  if (location.protocol === "https:" && /^http:/i.test(url) && !/^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(url)) {
-    out.textContent = "This page is on https, so browsers won't let it call an http:// address. Use the server's https address (for example its Tailscale name)."; return;
-  }
+  if (blockedHttp(url)) { out.textContent = HTTP_BLOCKED; return; }
   out.textContent = "Checking…";
   try {
     const { base, ids } = await listModels(url, key);
     $("#s-ocr-url").value = base;
     if (!ids.length) { out.textContent = "Connected, but the server lists no models."; fillModels([], ""); return; }
+    modelLists.server = ids;
     fillModels(ids, $("#s-ocr-model").value);
     out.textContent = `Connected: ${ids.length} model${ids.length === 1 ? "" : "s"}.` + (ids.some((m) => /chandra/i.test(m)) ? "" : " None of them is Chandra.");
   } catch (err) {
@@ -866,8 +932,10 @@ document.addEventListener("click", (e) => { if (e.target.closest("[data-open-set
 $("#settings-dlg").addEventListener("close", () => {
   if ($("#settings-dlg").returnValue !== "save") return;
   settings = { name: $("#s-name").value.trim(), key: $("#s-key").value.trim(), api: ($("#s-api").value.trim() || DEFAULT_API).replace(/\/+$/, ""), claudeKey: $("#s-claude").value.trim(), setting: $("#s-setting").value,
-    reader: $("#s-reader").value, ocrUrl: $("#s-ocr-url").value.trim().replace(/\/+$/, ""), ocrKey: $("#s-ocr-key").value.trim(), ocrModel: $("#s-ocr-model").value };
+    reader: $("#s-reader").value, ocrUrl: $("#s-ocr-url").value.trim().replace(/\/+$/, ""), ocrKey: $("#s-ocr-key").value.trim(), ocrModel: $("#s-ocr-model").value,
+    server: $("#s-server").value, gwUrl: $("#s-gw-url").value.trim().replace(/\/+$/, ""), gwKey: $("#s-gw-key").value.trim() };
   local.set("tb-settings", settings);
+  if (offline) { setOffline(""); }  // a new server: try it rather than wait on the old one
   renderConn(); renderPdfs(); pump();
   toast("Settings saved.");
 });
@@ -1165,8 +1233,8 @@ async function ocrCall(png, item, opts = {}) {
   for (let attempt = 1; ; attempt++) {
     let r;
     try {
-      r = await fetch(settings.ocrUrl + "/chat/completions", { method: "POST", signal: item.abort.signal, body: JSON.stringify(body),
-        headers: { "Content-Type": "application/json", ...(settings.ocrKey ? { Authorization: "Bearer " + settings.ocrKey } : {}) } });
+      r = await fetch(ocrApi() + "/chat/completions", { method: "POST", signal: item.abort.signal, body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", ...(ocrAuth() ? { Authorization: "Bearer " + ocrAuth() } : {}) } });
     } catch (err) {
       if (item.abort.signal.aborted) throw err;
       throw new Error("Couldn't reach the OCR server. Check its address in Settings, and that it's on.");
@@ -1310,7 +1378,7 @@ async function checkCoder(byHand = false) {
   if (!offline) return;
   let back = false;
   try {
-    const r = await fetch(settings.api + "/models", { headers: { Authorization: "Bearer " + settings.key } });
+    const r = await fetch(coderApi() + "/models", { headers: { Authorization: "Bearer " + coderKey() } });
     back = r.ok ? ((await r.json()).data || []).some((m) => m.id === MODEL) : [401, 403, 423].includes(r.status);  // a key problem is said by the note itself
   } catch { /* still not answering */ }
   if (!offline) return;
@@ -1318,7 +1386,7 @@ async function checkCoder(byHand = false) {
   else { setOffline(offline); if (byHand) toast("Still offline.", "err"); }
 }
 function pump() {
-  while (coding < AT_ONCE && settings.key && !paused && !offline) {
+  while (coding < AT_ONCE && codingReady() && !paused && !offline) {
     const item = pdfs.find((x) => x.state === "ready");
     if (!item) break;
     item.state = "coding"; item.msg = ""; coding++;
@@ -1328,17 +1396,17 @@ function pump() {
 }
 
 async function askCoder(note, scope, setting, signal) {
-  const r = await fetch(settings.api + "/chat/completions", {
+  const r = await fetch(coderApi() + "/chat/completions", {
     method: "POST", signal,
-    headers: { "Content-Type": "application/json", Authorization: "Bearer " + settings.key },
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + coderKey() },
     body: JSON.stringify({ model: MODEL, messages: [{ role: "user", content: note }], setting, scope, predict: scope === "all" }),
   });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = body?.error?.message || "", code = body?.error?.code || "";
     if (OFF_CODES.includes(code)) throw Object.assign(new Error(OFFLINE), { off: /starting/i.test(msg) ? STARTING : OFF_LINE });
-    if (r.status === 401) throw new Error("Your tester key wasn't accepted. Check it in Settings.");
-    if (r.status === 403) throw new Error("Your tester key is paused. Ask Triman to switch it back on.");
+    if (r.status === 401) throw new Error(`Your ${keyName()} wasn't accepted. Check it in Settings.`);
+    if (r.status === 403) throw new Error(`Your ${keyName()} is paused. Ask Triman to switch it back on.`);
     if (r.status === 423) throw new Error("Testing is switched off right now. " + msg);
     if (r.status === 503 || r.status === 429) {
       const wait = r.headers.get("Retry-After");
@@ -1367,7 +1435,7 @@ async function codeItem(item) {
     const [visit, all] = await Promise.all(asks);
     if (item.state !== "coding") return;
     item.result = mergeResults(visit.result, (all || visit).result);
-    item.model = visit.model; item.setting = setting; item.ms = Math.round(performance.now() - t0);
+    item.model = visit.model; item.server = serverName(); item.setting = setting; item.ms = Math.round(performance.now() - t0);
     item.state = "coded";
     if (!cur) openItem(item, false);
   } catch (err) {
@@ -1396,7 +1464,7 @@ function openItem(item, scroll = true) {
   if (!item?.result) return;
   stash();
   cur = item.draft || { id: crypto.randomUUID(), created: Date.now(), source: item.via || "pasted", ocrModel: item.ocrModel, pdfItem: item.id, note: item.text,
-    options: { setting: item.setting || "outpatient", scope: "both" }, result: item.result, ms: item.ms, model: item.model || MODEL,
+    options: { setting: item.setting || "outpatient", scope: "both" }, result: item.result, ms: item.ms, model: item.model || MODEL, server: item.server,
     reviews: {}, missed: [], comment: "", saved: false };
   pdfOpen = item.id;
   local.set("tb-draft", cur);
@@ -1437,7 +1505,7 @@ function addPdfs(files) {
   const items = add.map((file) => ({ id: pdfNext++, file, kind: kind(file), name: file.name, state: "reading", msg: "", text: "", via: "" }));
   pdfs.push(...items);
   renderPdfs();
-  if (items.length && !settings.key) openSettings();
+  if (items.length && !codingReady()) openSettings();
   pool(items, 3, localRead);
 }
 
@@ -1490,7 +1558,7 @@ function renderPdfs() {
                  error: `<span class="pill warn">Can't read</span>`, failed: `<span class="pill warn">No codes yet</span>` };
   box.innerHTML = `<div class="pdf-q-head"><b>Your notes</b><span class="sub">${have} of ${pdfs.length} have codes · ${done} checked${working ? (paused ? " · <b>Paused</b>" : offline ? " · waiting for the coder" : " · getting codes…") : ""}</span>
       <span class="right">
-      ${working && !paused && settings.key ? '<button class="btn sm" type="button" data-q-pause>Pause</button>' : ""}
+      ${working && !paused && codingReady() ? '<button class="btn sm" type="button" data-q-pause>Pause</button>' : ""}
       ${working && paused ? '<button class="btn sm soft" type="button" data-q-resume>Resume</button>' : ""}
       ${working ? '<button class="btn sm" type="button" data-q-cancel>Cancel</button>' : ""}
       ${held ? `<button class="btn sm soft" type="button" data-q-rest>Get codes for the ${held === 1 ? "stopped note" : held + " stopped notes"}</button>` : ""}
@@ -1500,7 +1568,7 @@ function renderPdfs() {
       ${pdfs.some((x) => x.result) ? '<button class="btn sm" type="button" data-pdf-xlsx>Download results (Excel)</button>' : ""}
       <button class="btn sm" type="button" data-pdf-clear>Remove all</button></span></div>
     ${offline && working ? `<div class="pdf-row off" role="alert"><span class="msg">${esc(offline)}</span><button class="btn sm" type="button" data-q-recheck>Check again</button></div>` : ""}
-    ${waiting && !settings.key ? `<div class="pdf-row"><span class="msg">Enter your tester key to get the codes for these notes.</span><button class="btn sm soft" type="button" data-open-settings>Enter my key</button></div>` : ""}
+    ${waiting && !codingReady() ? `<div class="pdf-row"><span class="msg">Enter your ${keyName()} to get the codes for these notes.</span><button class="btn sm soft" type="button" data-open-settings>Enter my key</button></div>` : ""}
     ${scans.length ? `<div class="pdf-row"><span class="msg">${settings.reader === "claude"
       ? `Reading a scan sends the whole PDF to Anthropic using ${settings.claudeKey ? "your key, and it's billed to that key's account" : "a Claude key"}.`
       : `Reading a scan sends its pages, as pictures, to the OCR server${settings.ocrModel ? ` (${esc(settings.ocrModel)})` : ""}.`} Nothing is sent until you press the button.</span></div>` : ""}
@@ -1593,7 +1661,7 @@ async function addSheet(file) {
                   sheet: id, row, cells: header.map((_, c) => (c === noteCol ? "" : r[c] ?? "")) });
     }
     toast(`Added ${notes.length} note${notes.length === 1 ? "" : "s"} from ${file.name}: tab "${tab}", column "${header[noteCol]}".`);
-    if (!settings.key) openSettings();
+    if (!codingReady()) openSettings();
     pump();
   } catch (err) {
     toast(err.message === "nocolumn" ? `${file.name}: couldn't find a column with the notes' text. Put one note in each row.`
@@ -1662,7 +1730,7 @@ $("#add-pasted").onclick = () => {
   const n = pdfs.filter((x) => x.via === "pasted").length + 1;
   pdfs.push({ id: pdfNext++, name: `Pasted note ${n}`, state: "ready", msg: "", text, via: "pasted" });
   $("#note").value = "";
-  if (!settings.key) openSettings();
+  if (!codingReady()) openSettings();
   pump();
 };
 $("#pdf-q").onclick = async (e) => {
@@ -2234,7 +2302,7 @@ function reportData(list) {
                replacements_in_same_category: s.sameCategory,
                suggested_from_rest_of_note: s.sug, suggestions_tester_disagreed: s.sugNo, codes_marked_correct_by_hand: s.confirmed, median_seconds: s.medianMs && s.medianMs / 1000, average_seconds: s.avgMs && s.avgMs / 1000 },
     cases: list.map((c, i) => ({
-      case: i + 1, id: c.id, checked: new Date(c.updated || c.created).toISOString(), model: c.model, options: c.options, seconds: c.ms / 1000,
+      case: i + 1, id: c.id, checked: new Date(c.updated || c.created).toISOString(), model: c.model, coded_on: c.server || "our coding server", options: c.options, seconds: c.ms / 1000,
       source: c.source === "pdf-ocr" && c.ocrModel ? `scanned PDF, read by ${c.ocrModel}` : SOURCE_LABEL[c.source] || SOURCE_LABEL.pasted, note: c.note, comment: c.comment || "",
       coder_codes: (c.result.codes || []).map((x) => ({
         part: x.part === "history" ? "suggested from the rest of the note" : x.part === "visit" ? "assessment and plan" : null, marked: !!c.reviews[x.code],

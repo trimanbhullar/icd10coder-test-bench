@@ -671,7 +671,7 @@
     <p class="sub" style="margin:0">Kept only in this browser.</p>
     <div class="form">
       <label class="field">Your name<input type="text" id="s-name" autocomplete="name" placeholder="Your name"><small>Shown on your report.</small></label>
-      <label class="field">Get codes from<select id="s-server"><option value="ours">Our coding server (your tester key)</option><option value="gateway">An LLM Gateway (its address and key)</option></select><small>Leave this on our coding server unless Triman gives you a gateway address.</small></label>
+      <label class="field">Get codes from<select id="s-server"><option value="ours">Our coding server (your tester key)</option><option value="gateway">Another coding server (its own address and key)</option></select><small>Leave this on our coding server unless Triman gives you another address.</small></label>
       <div class="form" id="s-ours-box" style="margin-top:0">
         <label class="field">Tester key<input type="password" id="s-key" autocomplete="off" spellcheck="false" placeholder="Paste your key here"><small>The key Triman gave you. Please don't share it.</small></label>
         <details><summary class="sub" style="cursor:pointer">Server address (leave this alone)</summary>
@@ -679,12 +679,12 @@
         <div class="row"><button class="btn sm" id="s-test" type="button">Test my key</button><span class="sub" id="s-result"></span></div>
       </div>
       <div class="form" id="s-gw-box" style="margin-top:0">
-        <label class="field">Gateway address<input type="url" id="s-gw-url" spellcheck="false" placeholder="https://…/v1"><small>The LLM Gateway's https address. Notes are coded there, and it can read scans too.</small></label>
-        <label class="field">Gateway key<input type="password" id="s-gw-key" autocomplete="off" spellcheck="false" placeholder="Paste the gateway's key here"><small>Please don't share it.</small></label>
+        <label class="field">Coder address<input type="url" id="s-gw-url" spellcheck="false" placeholder="https://…/v1"><small>The https address of an LLM Gateway, or any server, that serves the ICD-10 coder. Notes are coded there.</small></label>
+        <label class="field">Coder key<input type="password" id="s-gw-key" autocomplete="off" spellcheck="false" placeholder="Paste the coder's key here"><small>Please don't share it.</small></label>
         <div class="row"><button class="btn sm" id="s-gw-test" type="button">Connect</button><span class="sub" id="s-gw-result"></span></div>
       </div>
       <label class="field">Type of notes<select id="s-setting"><option value="outpatient">Office visits (the usual choice)</option><option value="inpatient">Hospital stays</option></select><small>Leave this on office visits unless Triman asks you to change it.</small></label>
-      <label class="field">Read scanned PDFs with<select id="s-reader"><option value="gateway">The LLM Gateway above</option><option value="server">An OCR server</option><option value="claude">Claude (your own Claude key)</option></select><small>Only scans need this; PDFs with real text are read in your browser.</small></label>
+      <label class="field">Read scanned PDFs with<select id="s-reader"><option value="gateway">The coding server above (same address and key)</option><option value="server">A separate OCR server (its own address and key)</option><option value="claude">Claude (your own Claude key)</option></select><small>Only scans need this; PDFs with real text are read in your browser.</small></label>
       <div class="form" id="s-ocr-box" style="margin-top:0">
         <div class="form" id="s-ocr-own" style="margin-top:0">
         <label class="field">OCR server address<input type="url" id="s-ocr-url" spellcheck="false" placeholder="https://…/v1"><small>Any OpenAI-compatible address. Each page of a scan goes to this server as a picture when you choose to read it.</small></label>
@@ -734,7 +734,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.5.8", build: "0a187bdf60b6" };
+const APP = { version: "1.5.9", build: "c960e7e24d7b" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -817,8 +817,8 @@ const viaGateway = () => settings.server === "gateway";
 const coderApi = () => viaGateway() ? settings.gwUrl : settings.api;
 const coderKey = () => viaGateway() ? settings.gwKey : settings.key;
 const codingReady = () => !!(coderApi() && coderKey());
-const keyName = () => viaGateway() ? "gateway key" : "tester key";
-const serverName = () => viaGateway() ? "LLM Gateway at " + (settings.gwUrl.replace(/^https?:\/\//, "").split("/")[0] || "?") : "our coding server";
+const keyName = () => viaGateway() ? "coder key" : "tester key";
+const serverName = () => viaGateway() ? "coding server at " + (settings.gwUrl.replace(/^https?:\/\//, "").split("/")[0] || "?") : "our coding server";
 // where scans go when the reader is an OCR server: the gateway's own address and key, or a separate server's
 const ocrUseGateway = () => settings.reader === "gateway" && viaGateway();
 const ocrApi = () => ocrUseGateway() ? settings.gwUrl : settings.ocrUrl;
@@ -869,8 +869,8 @@ const HTTP_BLOCKED = "This page is on https, so browsers won't let it call an ht
 $("#s-gw-test").onclick = async () => {
   const out = $("#s-gw-result"), key = $("#s-gw-key").value.trim();
   const url = $("#s-gw-url").value.trim().replace(/\/+$/, "");
-  if (!url) { out.textContent = "Enter the gateway's address first."; return; }
-  if (!key) { out.textContent = "Enter the gateway's key first."; return; }
+  if (!url) { out.textContent = "Enter the coder's address first."; return; }
+  if (!key) { out.textContent = "Enter the coder's key first."; return; }
   if (blockedHttp(url)) { out.textContent = HTTP_BLOCKED; return; }
   out.textContent = "Checking…";
   try {
@@ -880,10 +880,10 @@ $("#s-gw-test").onclick = async () => {
     modelLists.gateway = ocr;
     if ($("#s-reader").value === "gateway") fillModels(ocr, $("#s-ocr-model").value);
     const chandra = sortModels(ocr).filter((m) => /chandra/i.test(m));
-    out.textContent = (ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but the gateway isn't serving the coder (" + MODEL + ") right now.")
-      + (chandra.length ? ` It can read scans with ${chandra[0]}.` : ocr.length ? " It has no Chandra model for scans." : "");
+    out.textContent = (ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but this server isn't serving the coder (" + MODEL + ") right now.")
+      + (chandra.length ? ` It can also read scans with ${chandra[0]}.` : ocr.length ? " It has no Chandra model for scans." : "");
   } catch (err) {
-    out.textContent = unreachable(err) ? "Couldn't reach the gateway. Check the address, that it's on, and that it allows calls from this page (CORS)." : "Couldn't connect: " + err.message + ".";
+    out.textContent = unreachable(err) ? "Couldn't reach the coder. Check the address, that it's on, and that it allows calls from this page (CORS)." : "Couldn't connect: " + err.message + ".";
   }
 };
 // newest Chandra first, then everything else

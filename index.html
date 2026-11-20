@@ -764,7 +764,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.6.3", build: "5c66a8556fae" };
+const APP = { version: "1.6.4", build: "a94b894bb112" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -855,7 +855,7 @@ for (const k of ["key", "api", "server", "gwUrl", "gwKey", "claudeKey", "reader"
 if (LOCAL && /127\.0\.0\.1:8093/.test(settings.coderUrl)) settings.coderUrl = DEFAULT_API;  // the old preview address
 const coderApi = () => settings.coderUrl;
 const coderKey = () => settings.coderKey;
-const coderModel = () => settings.coderModel || MODEL;
+const coderModel = () => (/icd|coder/i.test(settings.coderModel || "") ? settings.coderModel : MODEL);  // never an OCR model saved here by mistake
 const codingReady = () => !!coderApi();
 const keyName = () => "key";
 const serverName = () => coderApi() === DEFAULT_API ? "our coding server" : "coding server at " + (coderApi().replace(/^https?:\/\//, "").split("/")[0] || "?");
@@ -948,7 +948,8 @@ function fillCoderModels(ids, pick) {
   const opts = ids.map((id) => `<option value="${esc(id)}">${esc(id)}</option>`);
   if (pick && !ids.includes(pick)) opts.unshift(`<option value="${esc(pick)}">${esc(pick)}${ids.length ? " (not running right now)" : ""}</option>`);
   sel.innerHTML = opts.join("") || `<option value="">Filled in once the key is checked</option>`;
-  sel.value = pick && (ids.includes(pick) || !ids.some(isCoder)) ? pick : ids.find(isCoder) || pick || ids[0] || "";
+  // the coder the server lists wins over a pick that isn't a coder (an OCR model chosen here by mistake)
+  sel.value = pick && ids.includes(pick) && (isCoder(pick) || !ids.some(isCoder)) ? pick : ids.find(isCoder) || pick || ids[0] || "";
 }
 $("#s-coder-test").onclick = async () => {
   const out = $("#s-coder-result"), key = $("#s-coder-key").value.trim(), url = normUrl($("#s-coder-url").value);

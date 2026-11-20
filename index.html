@@ -222,6 +222,35 @@
   dialog.dlg h2 { font-size: 17px; margin-bottom: 6px; }
   dialog.dlg .row.end { justify-content: flex-end; margin-top: 20px; }
   .form { display: grid; gap: 14px; margin-top: 14px; }
+  /* settings: numbered steps, choice cards, live checks */
+  dialog.dlg.wide { width: min(640px, calc(100vw - 32px)); padding: 0; overflow: hidden; }
+  dialog.dlg.wide form { display: flex; flex-direction: column; max-height: min(calc(100vh - 40px), 960px); }
+  .dlg-head { padding: 22px 24px 6px; }
+  .dlg-body { padding: 6px 24px 18px; overflow-y: auto; display: grid; gap: 12px; }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--border); }
+  .sec { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 16px; display: grid; gap: 12px; background: var(--surface-2); }
+  .sec-head { display: flex; align-items: center; gap: 10px; }
+  .sec-head h3 { font-size: 15px; margin: 0; flex: 1; }
+  .sec-num { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-wash); color: var(--accent); font-size: 13px; font-weight: 700; flex: none; }
+  .sec-head .pill:empty { display: none; }
+  .sec-head .pill.muted { color: var(--muted); background: var(--surface-3); }
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .choices.three { grid-template-columns: repeat(3, 1fr); }
+  .choices button { text-align: left; display: grid; gap: 3px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+  .choices button b { font-size: 13.5px; }
+  .choices button span { font-size: 12px; color: var(--text-2); line-height: 1.4; }
+  .choices button:hover { border-color: var(--border-strong); }
+  .choices button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); background: var(--accent-wash); }
+  .choices button[hidden] { display: none; }
+  .check { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+  .check .sub { flex: 1; }
+  .check .sub.ok { color: var(--good); } .check .sub.err { color: var(--critical); }
+  .check:has(.sub:empty) { display: none; }
+  .keybox { position: relative; display: flex; }
+  .keybox input { flex: 1; padding-right: 64px; }
+  .keybox .show { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--accent); font: 600 12px var(--body); cursor: pointer; padding: 4px 6px; }
+  .vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (max-width: 560px) { .choices, .choices.three { grid-template-columns: 1fr; } .dlg-head, .dlg-body, .dlg-foot { padding-left: 16px; padding-right: 16px; } }
   #toasts { position: fixed; right: 16px; bottom: 84px; z-index: 30; display: grid; gap: 8px; max-width: calc(100vw - 32px); }
   .toast { padding: 11px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-pop); font-size: 13.5px; animation: rise .2s ease-out; }
   .toast.err { border-color: var(--critical); }
@@ -579,7 +608,7 @@
         <li>Check the notes one by one, and tell us which codes are right or wrong.</li>
         <li>When you've finished your notes, download your report and email it to Triman.</li>
       </ol>
-      <p style="max-width:720px">To begin, enter your name and the <b>tester key</b> Triman gave you.</p>
+      <p style="max-width:720px">To begin, enter your name and paste your key: the <b>tester key</b> Triman gave you, or the key for another coding server.</p>
       <button class="btn primary lg" type="button" data-open-settings>Enter my name and key</button>
       </div>
       <svg class="welcome-art" viewBox="0 0 320 130" fill="none" aria-hidden="true">
@@ -665,40 +694,67 @@
   </div>
 </div>
 
-<dialog class="dlg" id="settings-dlg">
+<dialog class="dlg wide" id="settings-dlg">
   <form method="dialog" id="settings-form">
-    <h2>Settings</h2>
-    <p class="sub" style="margin:0">Kept only in this browser.</p>
-    <div class="form">
-      <label class="field">Your name<input type="text" id="s-name" autocomplete="name" placeholder="Your name"><small>Shown on your report.</small></label>
-      <label class="field">Get codes from<select id="s-server"><option value="ours">Our coding server (your tester key)</option><option value="gateway">Another coding server (its own address and key)</option></select><small>Leave this on our coding server unless Triman gives you another address.</small></label>
-      <div class="form" id="s-ours-box" style="margin-top:0">
-        <label class="field">Tester key<input type="password" id="s-key" autocomplete="off" spellcheck="false" placeholder="Paste your key here"><small>The key Triman gave you. Please don't share it.</small></label>
-        <details><summary class="sub" style="cursor:pointer">Server address (leave this alone)</summary>
-          <label class="field" style="margin-top:10px"><input type="url" id="s-api" spellcheck="false"><small>Only change this if Triman asks you to.</small></label></details>
-        <div class="row"><button class="btn sm" id="s-test" type="button">Test my key</button><span class="sub" id="s-result"></span></div>
-      </div>
-      <div class="form" id="s-gw-box" style="margin-top:0">
-        <label class="field">Coder address<input type="url" id="s-gw-url" spellcheck="false" placeholder="https://…/v1"><small>The https address of an LLM Gateway, or any server, that serves the ICD-10 coder. Notes are coded there.</small></label>
-        <label class="field">Coder key<input type="password" id="s-gw-key" autocomplete="off" spellcheck="false" placeholder="Paste the coder's key here"><small>Please don't share it.</small></label>
-        <div class="row"><button class="btn sm" id="s-gw-test" type="button">Connect</button><span class="sub" id="s-gw-result"></span></div>
-      </div>
-      <label class="field">Type of notes<select id="s-setting"><option value="outpatient">Office visits (the usual choice)</option><option value="inpatient">Hospital stays</option></select><small>Leave this on office visits unless Triman asks you to change it.</small></label>
-      <label class="field">Read scanned PDFs with<select id="s-reader"><option value="gateway">The coding server above (same address and key)</option><option value="server">A separate OCR server (its own address and key)</option><option value="claude">Claude (your own Claude key)</option></select><small>Only scans need this; PDFs with real text are read in your browser.</small></label>
-      <div class="form" id="s-ocr-box" style="margin-top:0">
-        <div class="form" id="s-ocr-own" style="margin-top:0">
-        <label class="field">OCR server address<input type="url" id="s-ocr-url" spellcheck="false" placeholder="https://…/v1"><small>Any OpenAI-compatible address. Each page of a scan goes to this server as a picture when you choose to read it.</small></label>
-        <label class="field">OCR key<input type="password" id="s-ocr-key" autocomplete="off" spellcheck="false" placeholder="Paste the server's key here"></label>
-        <div class="row"><button class="btn sm" id="s-ocr-load" type="button">Load models</button><span class="sub" id="s-ocr-result"></span></div>
-        </div>
-        <label class="field">OCR model<select id="s-ocr-model"><option value="">Load the models first</option></select><small>Chandra models are read with Chandra's own layout prompt and recovery steps; other models get a plain word-for-word prompt.</small></label>
-      </div>
-      <div class="form" id="s-claude-box" style="margin-top:0">
-        <label class="field">Claude API key<input type="password" id="s-claude" autocomplete="off" spellcheck="false" placeholder="Paste your Claude key here"><small>When you choose to read a scan, the whole PDF goes to Anthropic, the company behind Claude, and is billed to this key's account.</small></label>
-        <div class="row"><button class="btn sm" id="s-test-claude" type="button">Test my Claude key</button><span class="sub" id="s-claude-result"></span></div>
-      </div>
+    <div class="dlg-head">
+      <h2>Settings</h2>
+      <p class="sub" style="margin:0">Steps 1 and 2 are needed to get codes. Step 3 is only for scanned PDFs. Paste a key and it's checked straight away. Everything stays in this browser.</p>
     </div>
-    <div class="row end"><button class="btn" value="cancel" type="submit">Cancel</button><button class="btn primary" value="save" type="submit" id="s-save">Save</button></div>
+    <div class="dlg-body">
+      <section class="sec">
+        <div class="sec-head"><span class="sec-num">1</span><h3>Your name</h3><span class="pill" id="st-you"></span></div>
+        <label class="field"><span class="vh">Your name</span><input type="text" id="s-name" autocomplete="name" placeholder="Your name"><small>Shown on your report.</small></label>
+      </section>
+
+      <section class="sec">
+        <div class="sec-head"><span class="sec-num">2</span><h3>Where notes are coded</h3><span class="pill" id="st-code"></span></div>
+        <select id="s-server" class="vh" tabindex="-1" aria-hidden="true"><option value="ours">Our coding server</option><option value="gateway">Another coding server</option></select>
+        <div class="choices" data-for="s-server">
+          <button type="button" data-v="ours"><b>Our coding server</b><span>You only need the tester key Triman gave you.</span></button>
+          <button type="button" data-v="gateway"><b>Another coding server</b><span>For example the Mac. You need its address and its key.</span></button>
+        </div>
+        <div class="form" id="s-ours-box" style="margin-top:0">
+          <label class="field">Tester key<input type="password" id="s-key" autocomplete="off" spellcheck="false" placeholder="Paste your tester key here"></label>
+          <div class="check"><span class="sub" id="s-result"></span><button class="btn sm" id="s-test" type="button">Check again</button></div>
+          <details><summary class="sub" style="cursor:pointer">Server address (leave this alone)</summary>
+            <label class="field" style="margin-top:10px"><input type="url" id="s-api" spellcheck="false"><small>Only change this if Triman asks you to.</small></label></details>
+        </div>
+        <div class="form" id="s-gw-box" style="margin-top:0">
+          <label class="field">Address<input type="text" inputmode="url" id="s-gw-url" spellcheck="false" autocomplete="off" placeholder="Paste the address, e.g. mac.example.ts.net"><small>Paste it as you got it; https:// and /v1 are added for you.</small></label>
+          <label class="field">Key<input type="password" id="s-gw-key" autocomplete="off" spellcheck="false" placeholder="Paste its key here"></label>
+          <div class="check"><span class="sub" id="s-gw-result"></span><button class="btn sm" id="s-gw-test" type="button">Check again</button></div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-head"><span class="sec-num">3</span><h3>Reading scanned PDFs <span class="muted" style="font-weight:400">(optional)</span></h3><span class="pill" id="st-scan"></span></div>
+        <p class="sub" style="margin:0">PDFs with real text are read in your browser and need nothing here.</p>
+        <select id="s-reader" class="vh" tabindex="-1" aria-hidden="true"><option value="gateway">The coding server</option><option value="server">A separate OCR server</option><option value="claude">Claude</option></select>
+        <div class="choices three" data-for="s-reader">
+          <button type="button" data-v="gateway"><b>Same as step 2</b><span>Uses the coding server's address and key.</span></button>
+          <button type="button" data-v="server"><b>A separate OCR server</b><span>Its own address and key.</span></button>
+          <button type="button" data-v="claude"><b>Claude</b><span>Your own Claude key; billed to you.</span></button>
+        </div>
+        <div class="form" id="s-ocr-box" style="margin-top:0">
+          <div class="form" id="s-ocr-own" style="margin-top:0">
+            <label class="field">OCR address<input type="text" inputmode="url" id="s-ocr-url" spellcheck="false" autocomplete="off" placeholder="Paste the OCR server's address"><small>Any OpenAI-compatible server. Each page of a scan is sent there as a picture when you choose to read it.</small></label>
+            <label class="field">OCR key<input type="password" id="s-ocr-key" autocomplete="off" spellcheck="false" placeholder="Paste its key here"></label>
+            <div class="check"><span class="sub" id="s-ocr-result"></span><button class="btn sm" id="s-ocr-load" type="button">Check again</button></div>
+          </div>
+          <label class="field">OCR model<select id="s-ocr-model"><option value="">Filled in once the server is checked</option></select><small>The newest Chandra is picked for you; it gets Chandra's own layout reading.</small></label>
+        </div>
+        <div class="form" id="s-claude-box" style="margin-top:0">
+          <label class="field">Claude API key<input type="password" id="s-claude" autocomplete="off" spellcheck="false" placeholder="Paste your Claude key here"><small>When you choose to read a scan, the whole PDF goes to Anthropic and is billed to this key's account.</small></label>
+          <div class="check"><span class="sub" id="s-claude-result"></span><button class="btn sm" id="s-test-claude" type="button">Check again</button></div>
+        </div>
+      </section>
+
+      <section class="sec">
+        <div class="sec-head"><span class="sec-num">4</span><h3>Type of notes</h3></div>
+        <label class="field"><span class="vh">Type of notes</span><select id="s-setting"><option value="outpatient">Office visits (the usual choice)</option><option value="inpatient">Hospital stays</option></select><small>Leave this on office visits unless Triman asks you to change it.</small></label>
+      </section>
+    </div>
+    <div class="dlg-foot"><button class="btn" value="cancel" type="submit">Cancel</button><button class="btn primary" value="save" type="submit" id="s-save">Save</button></div>
   </form>
 </dialog>
 
@@ -734,7 +790,7 @@
 <div id="toasts" aria-live="polite"></div>
 
 <script>
-const APP = { version: "1.5.9", build: "c960e7e24d7b" };
+const APP = { version: "1.6.0", build: "ad5726b8a3ff" };
 const MODEL = "icd10-cm-coder";
 const OFFLINE = "The ICD-10 Coder service is currently offline. Please contact Triman to have it started, then try again.";
 // gateway/coder error codes that mean the coder itself is off, or the model it needs isn't the one being served
@@ -838,15 +894,96 @@ function openSettings() {
   $("#s-server").value = settings.server || "ours"; $("#s-gw-url").value = settings.gwUrl || ""; $("#s-gw-key").value = settings.gwKey || "";
   $("#s-reader").value = settings.reader; $("#s-ocr-url").value = settings.ocrUrl || ""; $("#s-ocr-key").value = settings.ocrKey || "";
   modelLists = { gateway: null, server: null };
-  $("#s-result").textContent = ""; $("#s-claude-result").textContent = ""; $("#s-ocr-result").textContent = ""; $("#s-gw-result").textContent = "";
+  for (const id of ["s-result", "s-claude-result", "s-ocr-result", "s-gw-result"]) say($("#" + id), "");
+  checks = {};
+  $$("#settings-dlg .keybox input").forEach((i) => { i.type = "password"; i.nextElementSibling.textContent = "Show"; });
   showServer();
   fillModels(settings.ocrModel ? [settings.ocrModel] : [], settings.ocrModel);
   $("#settings-dlg").showModal();
+  autoCheck(true);
 }
+// the result of each check while the dialog is open: true (worked), false (didn't), or missing (not checked)
+let checks = {};
+function say(out, text, ok) { out.textContent = text; out.className = "sub" + (ok === true ? " ok" : ok === false ? " err" : ""); }
+// an address as people paste it: no scheme means https (http for this computer), no trailing slash
+function normUrl(u) {
+  u = (u || "").trim().replace(/\s+/g, "").replace(/\/+$/, "");
+  if (u && !/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) u = (/^(127\.0\.0\.1|localhost)(:|\/|$)/i.test(u) ? "http://" : "https://") + u;
+  return u;
+}
+// the badge on each step, from what is typed and what the checks found
+function renderSteps() {
+  const set = (id, text, cls) => { const p = $("#" + id); p.textContent = text; p.className = "pill " + cls; };
+  set("st-you", $("#s-name").value.trim() ? "Done" : "Needed", $("#s-name").value.trim() ? "good" : "warn");
+  const gw = $("#s-server").value === "gateway", ck = checks[gw ? "gw" : "ours"];
+  const missing = gw ? (!$("#s-gw-url").value.trim() ? "Paste the address" : !$("#s-gw-key").value.trim() ? "Paste the key" : "")
+    : (!$("#s-key").value.trim() ? "Paste your key" : "");
+  if (missing) set("st-code", missing, "warn");
+  else set("st-code", ck === true ? "Connected" : ck === false ? "Not working yet" : "Checking…", ck === true ? "good" : ck === false ? "bad" : "accent");
+  const r = $("#s-reader").value;
+  if (r === "claude") {
+    const k = $("#s-claude").value.trim();
+    set("st-scan", !k ? "Not set up" : checks.claude === true ? "Ready" : checks.claude === false ? "Not working yet" : "Checking…",
+      !k ? "muted" : checks.claude === true ? "good" : checks.claude === false ? "bad" : "accent");
+  } else {
+    const ck2 = r === "gateway" ? checks.gw : checks.ocr, has = r === "gateway" ? $("#s-gw-url").value.trim() : $("#s-ocr-url").value.trim();
+    const model = $("#s-ocr-model").value;
+    set("st-scan", !has ? "Not set up" : ck2 === false ? "Not working yet" : model ? (ck2 === true ? "Ready" : "Checking…") : ck2 === true ? "No OCR model" : "Checking…",
+      !has ? "muted" : ck2 === false || (ck2 === true && !model) ? "bad" : model && ck2 === true ? "good" : "accent");
+  }
+}
+// clickable cards in front of a hidden select
+for (const box of $$(".choices")) {
+  const sel = $("#" + box.dataset.for);
+  box.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-v]");
+    if (!b) return;
+    sel.value = b.dataset.v; sel.onchange?.();
+  });
+}
+function syncChoices() {
+  for (const box of $$(".choices")) {
+    const sel = $("#" + box.dataset.for);
+    for (const b of $$("button[data-v]", box)) {
+      b.setAttribute("aria-pressed", String(sel.value === b.dataset.v));
+      b.hidden = !!sel.querySelector(`[value="${b.dataset.v}"]`)?.hidden;
+    }
+  }
+}
+// a Show button on every key box
+for (const i of $$("#settings-dlg input[type=password]")) {
+  const wrap = document.createElement("span"); wrap.className = "keybox";
+  i.replaceWith(wrap); wrap.append(i);
+  const b = document.createElement("button"); b.type = "button"; b.className = "show"; b.textContent = "Show";
+  b.onclick = () => { const hide = i.type === "text"; i.type = hide ? "password" : "text"; b.textContent = hide ? "Show" : "Hide"; };
+  wrap.append(b);
+}
+// checks run by themselves shortly after an address or key is pasted or typed
+const CHECKS = { ours: ["s-key"], gw: ["s-gw-url", "s-gw-key"], ocr: ["s-ocr-url"], claude: ["s-claude"] };
+const CHECK_BTN = { ours: "s-test", gw: "s-gw-test", ocr: "s-ocr-load", claude: "s-test-claude" };
+const checkTimers = {};
+function autoCheck(all = false, only) {
+  const gw = $("#s-server").value === "gateway", r = $("#s-reader").value;
+  const want = { ours: !gw, gw: gw, ocr: r === "server", claude: r === "claude" };
+  for (const k of Object.keys(CHECKS)) {
+    if ((only && k !== only) || !want[k] || !CHECKS[k].every((id) => $("#" + id).value.trim())) continue;
+    clearTimeout(checkTimers[k]);
+    checkTimers[k] = setTimeout(() => $("#" + CHECK_BTN[k]).click(), all ? 0 : 700);
+  }
+  renderSteps();
+}
+for (const [k, ids] of Object.entries(CHECKS)) {
+  for (const id of [...ids, ...(k === "ocr" ? ["s-ocr-key"] : [])]) {
+    $("#" + id).addEventListener("input", () => { delete checks[k]; autoCheck(false, k); });
+  }
+}
+$("#s-name").addEventListener("input", renderSteps);
+$("#s-ocr-model").addEventListener("change", renderSteps);
 // the OCR models each source listed while the dialog is open, so switching the reader back and forth keeps them
 let modelLists = { gateway: null, server: null };
 function showServer() {
   const gw = $("#s-server").value === "gateway";
+  queueMicrotask(() => { syncChoices(); renderSteps(); });
   $("#s-ours-box").hidden = gw; $("#s-gw-box").hidden = !gw;
   $("#s-reader").querySelector('[value="gateway"]').hidden = !gw;
   if (!gw && $("#s-reader").value === "gateway") $("#s-reader").value = "server";
@@ -856,23 +993,25 @@ function showReader() {
   const s = $("#s-reader").value;
   $("#s-ocr-box").hidden = s === "claude"; $("#s-ocr-own").hidden = s !== "server"; $("#s-claude-box").hidden = s !== "claude";
   if (modelLists[s]) fillModels(modelLists[s], $("#s-ocr-model").value);
+  syncChoices(); renderSteps();
 }
 $("#s-server").onchange = () => {
   // a gateway reads scans as well, unless Claude was chosen
   if ($("#s-server").value === "gateway" && $("#s-reader").value === "server" && !$("#s-ocr-url").value.trim()) $("#s-reader").value = "gateway";
-  showServer();
+  showServer(); autoCheck(true);
 };
-$("#s-reader").onchange = showReader;
+$("#s-reader").onchange = () => { showReader(); autoCheck(true); };
 // browsers block http:// calls from an https page, except to this computer
 const blockedHttp = (url) => location.protocol === "https:" && /^http:/i.test(url) && !/^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(url);
 const HTTP_BLOCKED = "This page is on https, so browsers won't let it call an http:// address. Use the server's https address (for example its Tailscale name).";
 $("#s-gw-test").onclick = async () => {
   const out = $("#s-gw-result"), key = $("#s-gw-key").value.trim();
-  const url = $("#s-gw-url").value.trim().replace(/\/+$/, "");
-  if (!url) { out.textContent = "Enter the coder's address first."; return; }
-  if (!key) { out.textContent = "Enter the coder's key first."; return; }
-  if (blockedHttp(url)) { out.textContent = HTTP_BLOCKED; return; }
-  out.textContent = "Checking…";
+  const url = normUrl($("#s-gw-url").value);
+  const done = (text, ok) => { say(out, text, ok); checks.gw = ok; renderSteps(); };
+  if (!url) return done("Paste the address first.", false);
+  if (!key) return done("Paste the key first.", false);
+  if (blockedHttp(url)) return done(HTTP_BLOCKED, false);
+  say(out, "Checking…"); delete checks.gw; renderSteps();
   try {
     const { base, ids } = await listModels(url, key);
     $("#s-gw-url").value = base;
@@ -880,10 +1019,10 @@ $("#s-gw-test").onclick = async () => {
     modelLists.gateway = ocr;
     if ($("#s-reader").value === "gateway") fillModels(ocr, $("#s-ocr-model").value);
     const chandra = sortModels(ocr).filter((m) => /chandra/i.test(m));
-    out.textContent = (ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but this server isn't serving the coder (" + MODEL + ") right now.")
-      + (chandra.length ? ` It can also read scans with ${chandra[0]}.` : ocr.length ? " It has no Chandra model for scans." : "");
+    done((ids.includes(MODEL) ? "Connected. The coder is ready." : "Connected, but this server isn't serving the coder (" + MODEL + ") right now.")
+      + (chandra.length ? ` It can read scans too (${chandra[0]}).` : ocr.length ? " It has no Chandra model for scans." : ""), ids.includes(MODEL));
   } catch (err) {
-    out.textContent = unreachable(err) ? "Couldn't reach the coder. Check the address, that it's on, and that it allows calls from this page (CORS)." : "Couldn't connect: " + err.message + ".";
+    done(unreachable(err) ? "Couldn't reach it. Check the address and that the server is on." : err.message === "the key wasn't accepted" ? "The key wasn't accepted. Check that it was pasted in full." : "Couldn't connect: " + err.message + ".", false);
   }
 };
 // newest Chandra first, then everything else
@@ -899,19 +1038,21 @@ function fillModels(ids, pick) {
 }
 $("#s-ocr-load").onclick = async () => {
   const out = $("#s-ocr-result"), key = $("#s-ocr-key").value.trim();
-  let url = $("#s-ocr-url").value.trim().replace(/\/+$/, "");
-  if (!url) { out.textContent = "Enter the server's address first."; return; }
-  if (blockedHttp(url)) { out.textContent = HTTP_BLOCKED; return; }
-  out.textContent = "Checking…";
+  const url = normUrl($("#s-ocr-url").value);
+  const done = (text, ok) => { say(out, text, ok); checks.ocr = ok; renderSteps(); };
+  if (!url) return done("Paste the address first.", false);
+  if (blockedHttp(url)) return done(HTTP_BLOCKED, false);
+  say(out, "Checking…"); delete checks.ocr; renderSteps();
   try {
     const { base, ids } = await listModels(url, key);
     $("#s-ocr-url").value = base;
-    if (!ids.length) { out.textContent = "Connected, but the server lists no models."; fillModels([], ""); return; }
+    if (!ids.length) { fillModels([], ""); return done("Connected, but the server lists no models.", false); }
     modelLists.server = ids;
     fillModels(ids, $("#s-ocr-model").value);
-    out.textContent = `Connected: ${ids.length} model${ids.length === 1 ? "" : "s"}.` + (ids.some((m) => /chandra/i.test(m)) ? "" : " None of them is Chandra.");
+    const chandra = sortModels(ids).filter((m) => /chandra/i.test(m));
+    done(chandra.length ? `Connected. Scans will be read with ${chandra[0]}.` : `Connected, but none of its ${ids.length} model${ids.length === 1 ? " is" : "s are"} Chandra.`, true);
   } catch (err) {
-    out.textContent = unreachable(err) ? "Couldn't reach the server. Check the address, that it's on, and that it allows calls from this page (CORS)." : "Couldn't connect: " + err.message + ".";
+    done(unreachable(err) ? "Couldn't reach it. Check the address and that the server is on." : err.message === "the key wasn't accepted" ? "The key wasn't accepted. Check that it was pasted in full." : "Couldn't connect: " + err.message + ".", false);
   }
 };
 // the models an OpenAI-compatible server lists; an address given without /v1 is tried with it too
@@ -931,37 +1072,42 @@ $("#open-settings").onclick = openSettings;
 document.addEventListener("click", (e) => { if (e.target.closest("[data-open-settings]")) openSettings(); });
 $("#settings-dlg").addEventListener("close", () => {
   if ($("#settings-dlg").returnValue !== "save") return;
-  settings = { name: $("#s-name").value.trim(), key: $("#s-key").value.trim(), api: ($("#s-api").value.trim() || DEFAULT_API).replace(/\/+$/, ""), claudeKey: $("#s-claude").value.trim(), setting: $("#s-setting").value,
-    reader: $("#s-reader").value, ocrUrl: $("#s-ocr-url").value.trim().replace(/\/+$/, ""), ocrKey: $("#s-ocr-key").value.trim(), ocrModel: $("#s-ocr-model").value,
-    server: $("#s-server").value, gwUrl: $("#s-gw-url").value.trim().replace(/\/+$/, ""), gwKey: $("#s-gw-key").value.trim() };
+  settings = { name: $("#s-name").value.trim(), key: $("#s-key").value.trim(), api: normUrl($("#s-api").value) || DEFAULT_API, claudeKey: $("#s-claude").value.trim(), setting: $("#s-setting").value,
+    reader: $("#s-reader").value, ocrUrl: normUrl($("#s-ocr-url").value), ocrKey: $("#s-ocr-key").value.trim(), ocrModel: $("#s-ocr-model").value,
+    server: $("#s-server").value, gwUrl: normUrl($("#s-gw-url").value), gwKey: $("#s-gw-key").value.trim() };
   local.set("tb-settings", settings);
   if (offline) { setOffline(""); }  // a new server: try it rather than wait on the old one
   renderConn(); renderPdfs(); pump();
   toast("Settings saved.");
 });
 $("#s-test").onclick = async () => {
-  const api = ($("#s-api").value.trim() || DEFAULT_API).replace(/\/+$/, ""), key = $("#s-key").value.trim();
-  $("#s-result").textContent = "Checking…";
+  const api = normUrl($("#s-api").value) || DEFAULT_API, key = $("#s-key").value.trim(), out = $("#s-result");
+  if (!key) { say(out, "Paste your key first.", false); checks.ours = false; renderSteps(); return; }
+  say(out, "Checking…"); delete checks.ours; renderSteps();
   try {
     const r = await fetch(api + "/models", { headers: { Authorization: "Bearer " + key } });
-    if (r.status === 401) throw new Error("the key wasn't accepted");
-    if (r.status === 403) throw new Error("this key is paused; ask Triman");
-    if (!r.ok) throw new Error("the server answered " + r.status);
+    if (r.status === 401) throw new Error("The key wasn't accepted. Check that it was pasted in full.");
+    if (r.status === 403) throw new Error("This key is paused. Ask Triman to switch it back on.");
+    if (!r.ok) throw new Error("The server answered " + r.status + ".");
     const ids = ((await r.json()).data || []).map((m) => m.id);
-    $("#s-result").textContent = ids.includes(MODEL) ? "Connected: the coder is available." : "Connected, but " + OFFLINE.charAt(0).toLowerCase() + OFFLINE.slice(1);
+    // a good key with the coder switched off still counts: notes wait and start by themselves
+    say(out, ids.includes(MODEL) ? "Connected. The coder is ready." : "Your key works, but " + OFFLINE.charAt(0).toLowerCase() + OFFLINE.slice(1), true);
+    checks.ours = true;
   } catch (err) {
-    $("#s-result").textContent = unreachable(err) ? UNREACHABLE : "Couldn't connect: " + err.message + ".";
+    say(out, unreachable(err) ? UNREACHABLE : err.message, false); checks.ours = false;
   }
+  renderSteps();
 };
 
 $("#s-test-claude").onclick = async () => {
   const key = $("#s-claude").value.trim(), out = $("#s-claude-result");
-  if (!key) { out.textContent = "Enter a key first."; return; }
-  out.textContent = "Checking…";
+  const done = (text, ok) => { say(out, text, ok); checks.claude = ok; renderSteps(); };
+  if (!key) return done("Paste a key first.", false);
+  say(out, "Checking…"); delete checks.claude; renderSteps();
   try {
     const r = await fetch(CLAUDE_API + "/models?limit=1", { headers: claudeHeaders(key) });  // free: reads no document
-    out.textContent = r.ok ? "Key accepted." : r.status === 401 ? "This key wasn't accepted." : r.status === 403 ? "This key isn't allowed to do this." : "Anthropic answered " + r.status + ".";
-  } catch { out.textContent = "Couldn't reach Anthropic. Check your internet connection."; }
+    done(r.ok ? "Key accepted." : r.status === 401 ? "This key wasn't accepted." : r.status === 403 ? "This key isn't allowed to do this." : "Anthropic answered " + r.status + ".", r.ok);
+  } catch { done("Couldn't reach Anthropic. Check your internet connection.", false); }
 };
 
 // ---------------------------------------------------------------- tabs
